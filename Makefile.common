@@ -20,7 +20,7 @@ endif
 
 
 
-SOURCES_C += $(GFXPRIM_LIBS)/backends/gp_aalib.c \
+SOURCES_C += \
     $(GFXPRIM_LIBS)/backends/gp_backend.c \
     $(GFXPRIM_LIBS)/backends/gp_clipboard.c \
     $(GFXPRIM_LIBS)/backends/gp_backend_virtual.c

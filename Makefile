@@ -642,8 +642,7 @@ clean:
 	$(MAKE) -C vendor/gfxprim clean
 
 vendor/gfxprim/config.h:
-	cd vendor/gfxprim && ./configure
-	cp config.h vendor/gfxprim
+	cd vendor/gfxprim && ./configure -d libsdl -d libpng -d jpeg -d webp -d openjpeg -d giflib -d tiff -d zlib -d libarchive -d libX11 -d libxcb -d xcb-util-errors -d X_SHM -d aalib -d freetype -d fontconfig -d dl -d V4L2 -d pthread -d backtrace
 
 vendor/gfxprim/libs/core/gp_blit.gen.c: vendor/gfxprim/config.h
 	$(MAKE) -C vendor/gfxprim
