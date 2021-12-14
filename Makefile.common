@@ -18,8 +18,7 @@ SOURCES_C  += $(LIBRETRO_COMMON_DIR)/compat/compat_strl.c \
               $(LIBRETRO_COMMON_DIR)/string/stdstring.c
 endif
 
-
-
+# GFXPrim
 SOURCES_C += \
     $(GFXPRIM_LIBS)/backends/gp_backend.c \
     $(GFXPRIM_LIBS)/backends/gp_clipboard.c \
@@ -37,13 +36,11 @@ SOURCES_C += $(GFXPRIM_LIBS)/core/gp_blit.c \
     $(GFXPRIM_LIBS)/core/gp_pixel.c \
     $(GFXPRIM_LIBS)/core/gp_pixel.gen.c \
     $(GFXPRIM_LIBS)/core/gp_pixmap.c \
-    $(GFXPRIM_LIBS)/core/gp_threads.c \
     $(GFXPRIM_LIBS)/core/gp_write_pixel.c
 
 SOURCES_C += $(GFXPRIM_LIBS)/filters/gp_add.gen.c \
     $(GFXPRIM_LIBS)/filters/gp_apply_tables.c \
     $(GFXPRIM_LIBS)/filters/gp_apply_tables.gen.c \
-    $(GFXPRIM_LIBS)/filters/gp_blur.c \
     $(GFXPRIM_LIBS)/filters/gp_brightness_contrast.gen.c \
     $(GFXPRIM_LIBS)/filters/gp_brightness.gen.c \
     $(GFXPRIM_LIBS)/filters/gp_contrast.gen.c \
@@ -60,7 +57,6 @@ SOURCES_C += $(GFXPRIM_LIBS)/filters/gp_add.gen.c \
     $(GFXPRIM_LIBS)/filters/gp_laplace.c \
     $(GFXPRIM_LIBS)/filters/gp_linear_convolution.c \
     $(GFXPRIM_LIBS)/filters/gp_linear_convolution.gen.c \
-    $(GFXPRIM_LIBS)/filters/gp_linear_threads.c \
     $(GFXPRIM_LIBS)/filters/gp_max.gen.c \
     $(GFXPRIM_LIBS)/filters/gp_median.c \
     $(GFXPRIM_LIBS)/filters/gp_min.gen.c \
