@@ -1,9 +1,7 @@
 #include <stdarg.h>
 
 #include "backends/gp_backend_virtual.h"
-#include "core/gp_core.h"
-#include "gfx/gp_gfx.h"
-#include "utils/gp_utils.h"
+#include "gfxprim.h"
 
 #include "libretro.h"
 
@@ -146,7 +144,6 @@ static void render(void) {
 	gp_pixel red = gp_rgb_to_pixmap_pixel(230, 57, 70, backend->pixmap);
 	gp_pixel white = gp_rgb_to_pixmap_pixel(241, 250, 238, backend->pixmap);
 	gp_pixel blue = gp_rgb_to_pixmap_pixel(69, 123, 157, backend->pixmap);
-
 
 	gp_fill(backend->pixmap, white);
 	gp_fill_rect(backend->pixmap, 100, 100, 20, 40, red);
