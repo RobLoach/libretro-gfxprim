@@ -1,0 +1,121 @@
+GFXPRIM_DIR := $(CORE_DIR)/vendor/gfxprim
+GFXPRIM_LIBS := $(GFXPRIM_DIR)/libs
+LIBRETRO_COMMON_DIR := $(CORE_DIR)/vendor/libretro-common
+
+INCFLAGS    := -I$(LIBRETRO_COMMON_DIR)/include \
+               -I$(GFXPRIM_DIR)/include \
+               -I$(CORE_DIR)
+
+SOURCES_C   := $(CORE_DIR)/gfxprim_libretro.c
+SOURCES_S   :=
+
+ifneq ($(STATIC_LINKING), 1)
+SOURCES_C  += $(LIBRETRO_COMMON_DIR)/compat/compat_strl.c \
+              $(LIBRETRO_COMMON_DIR)/compat/fopen_utf8.c \
+              $(LIBRETRO_COMMON_DIR)/compat/compat_posix_string.c \
+              $(LIBRETRO_COMMON_DIR)/compat/compat_strcasestr.c \
+              $(LIBRETRO_COMMON_DIR)/encodings/encoding_utf.c \
+              $(LIBRETRO_COMMON_DIR)/string/stdstring.c
+endif
+
+
+
+SOURCES_C += $(GFXPRIM_LIBS)/backends/gp_aalib.c \
+    $(GFXPRIM_LIBS)/backends/gp_backend.c \
+    $(GFXPRIM_LIBS)/backends/gp_clipboard.c \
+    $(GFXPRIM_LIBS)/backends/gp_backend_virtual.c
+
+SOURCES_C += $(GFXPRIM_LIBS)/core/gp_blit.c \
+    $(GFXPRIM_LIBS)/core/gp_blit.gen.c \
+    $(GFXPRIM_LIBS)/core/gp_common.c \
+    $(GFXPRIM_LIBS)/core/gp_convert.gen.c \
+    $(GFXPRIM_LIBS)/core/gp_debug.c \
+    $(GFXPRIM_LIBS)/core/gp_fill.gen.c \
+    $(GFXPRIM_LIBS)/core/gp_gamma.c \
+    $(GFXPRIM_LIBS)/core/gp_gamma_correction.gen.c \
+    $(GFXPRIM_LIBS)/core/gp_get_put_pixel.c \
+    $(GFXPRIM_LIBS)/core/gp_pixel.c \
+    $(GFXPRIM_LIBS)/core/gp_pixel.gen.c \
+    $(GFXPRIM_LIBS)/core/gp_pixmap.c \
+    $(GFXPRIM_LIBS)/core/gp_threads.c \
+    $(GFXPRIM_LIBS)/core/gp_write_pixel.c
+
+SOURCES_C += $(GFXPRIM_LIBS)/filters/gp_add.gen.c \
+    $(GFXPRIM_LIBS)/filters/gp_apply_tables.c \
+    $(GFXPRIM_LIBS)/filters/gp_apply_tables.gen.c \
+    $(GFXPRIM_LIBS)/filters/gp_blur.c \
+    $(GFXPRIM_LIBS)/filters/gp_brightness_contrast.gen.c \
+    $(GFXPRIM_LIBS)/filters/gp_brightness.gen.c \
+    $(GFXPRIM_LIBS)/filters/gp_contrast.gen.c \
+    $(GFXPRIM_LIBS)/filters/gp_convolution.c \
+    $(GFXPRIM_LIBS)/filters/gp_cubic.gen.c \
+    $(GFXPRIM_LIBS)/filters/gp_diff.gen.c \
+    $(GFXPRIM_LIBS)/filters/gp_edge.c \
+    $(GFXPRIM_LIBS)/filters/gp_floyd_steinberg.gen.c \
+    $(GFXPRIM_LIBS)/filters/gp_gaussian_noise.gen.c \
+    $(GFXPRIM_LIBS)/filters/gp_hilbert_peano.gen.c \
+    $(GFXPRIM_LIBS)/filters/gp_histogram.c \
+    $(GFXPRIM_LIBS)/filters/gp_histogram.gen.c \
+    $(GFXPRIM_LIBS)/filters/gp_invert.gen.c \
+    $(GFXPRIM_LIBS)/filters/gp_laplace.c \
+    $(GFXPRIM_LIBS)/filters/gp_linear_convolution.c \
+    $(GFXPRIM_LIBS)/filters/gp_linear_convolution.gen.c \
+    $(GFXPRIM_LIBS)/filters/gp_linear_threads.c \
+    $(GFXPRIM_LIBS)/filters/gp_max.gen.c \
+    $(GFXPRIM_LIBS)/filters/gp_median.c \
+    $(GFXPRIM_LIBS)/filters/gp_min.gen.c \
+    $(GFXPRIM_LIBS)/filters/gp_mirror_h.gen.c \
+    $(GFXPRIM_LIBS)/filters/gp_mul.gen.c \
+    $(GFXPRIM_LIBS)/filters/gp_multi_tone.gen.c \
+    $(GFXPRIM_LIBS)/filters/gp_posterize.gen.c \
+    $(GFXPRIM_LIBS)/filters/gp_rand.c \
+    $(GFXPRIM_LIBS)/filters/gp_resize.c \
+    $(GFXPRIM_LIBS)/filters/gp_resize_cubic_float.c \
+    $(GFXPRIM_LIBS)/filters/gp_resize_cubic.gen.c \
+    $(GFXPRIM_LIBS)/filters/gp_resize_linear.gen.c \
+    $(GFXPRIM_LIBS)/filters/gp_resize_nn.gen.c \
+    $(GFXPRIM_LIBS)/filters/gp_rotate.c \
+    $(GFXPRIM_LIBS)/filters/gp_rotate.gen.c \
+    $(GFXPRIM_LIBS)/filters/gp_sepia.c \
+    $(GFXPRIM_LIBS)/filters/gp_sigma.c \
+    $(GFXPRIM_LIBS)/filters/gp_weighted_median.c
+
+SOURCES_C += $(GFXPRIM_LIBS)/gfx/gp_arc.c \
+    $(GFXPRIM_LIBS)/gfx/gp_circle.c \
+    $(GFXPRIM_LIBS)/gfx/gp_circle.gen.c \
+    $(GFXPRIM_LIBS)/gfx/gp_circle_seg.c \
+    $(GFXPRIM_LIBS)/gfx/gp_circle_seg.gen.c \
+    $(GFXPRIM_LIBS)/gfx/gp_ellipse.c \
+    $(GFXPRIM_LIBS)/gfx/gp_fill_circle.gen.c \
+    $(GFXPRIM_LIBS)/gfx/gp_fill_ellipse.gen.c \
+    $(GFXPRIM_LIBS)/gfx/gp_fill_ring.gen.c \
+    $(GFXPRIM_LIBS)/gfx/gp_fill_triangle.gen.c \
+    $(GFXPRIM_LIBS)/gfx/gp_hline.c \
+    $(GFXPRIM_LIBS)/gfx/gp_hline.gen.c \
+    $(GFXPRIM_LIBS)/gfx/gp_line_clip.c \
+    $(GFXPRIM_LIBS)/gfx/gp_line.gen.c \
+    $(GFXPRIM_LIBS)/gfx/gp_line_th.gen.c \
+    $(GFXPRIM_LIBS)/gfx/gp_polygon.gen.c \
+    $(GFXPRIM_LIBS)/gfx/gp_rect.c \
+    $(GFXPRIM_LIBS)/gfx/gp_symbol.c \
+    $(GFXPRIM_LIBS)/gfx/gp_symbol.gen.c \
+    $(GFXPRIM_LIBS)/gfx/gp_tetragon.c \
+    $(GFXPRIM_LIBS)/gfx/gp_triangle.c \
+    $(GFXPRIM_LIBS)/gfx/gp_vline.c \
+    $(GFXPRIM_LIBS)/gfx/gp_vline.gen.c
+
+SOURCES_C += $(GFXPRIM_LIBS)/input/gp_event.c \
+    $(GFXPRIM_LIBS)/input/gp_event_queue.c \
+    $(GFXPRIM_LIBS)/input/gp_input_driver_kbd.c \
+    $(GFXPRIM_LIBS)/input/gp_input_driver_linux.c \
+    $(GFXPRIM_LIBS)/input/gp_task.c \
+    $(GFXPRIM_LIBS)/input/gp_timer.c \
+    $(GFXPRIM_LIBS)/input/gp_time_stamp.c
+
+SOURCES_C += $(GFXPRIM_LIBS)/utils/gp_block_alloc.c \
+    $(GFXPRIM_LIBS)/utils/gp_fds.c \
+    $(GFXPRIM_LIBS)/utils/gp_htable.c \
+    $(GFXPRIM_LIBS)/utils/gp_json.c \
+    $(GFXPRIM_LIBS)/utils/gp_matrix.c \
+    $(GFXPRIM_LIBS)/utils/gp_vec.c \
+    $(GFXPRIM_LIBS)/utils/gp_vec_str.c

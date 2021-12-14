@@ -1,0 +1,8 @@
+[submodule "vendor/gfxprim"]
+	path = vendor/gfxprim
+	url = https://github.com/gfxprim/gfxprim
+	ignore = dirty
+[submodule "vendor/libretro-common"]
+	path = vendor/libretro-common
+	url = https://github.com/libretro/libretro-common.git
+	ignore = dirty
