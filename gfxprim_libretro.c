@@ -8,9 +8,20 @@
 static struct retro_log_callback logging;
 static retro_log_printf_t log_cb;
 
-struct gp_backend * backend;
-int screenWidth, screenHeight;
-float x, y;
+struct gfxprim_core {
+	gp_backend * backend;
+	struct {
+		struct {
+			bool left;
+			bool right;
+			int x;
+			int y;
+		} mouse;
+	} input;
+	struct {
+		uint deltaMillseconds;
+	} time;
+} core;
 
 static retro_video_refresh_t video_cb;
 static retro_audio_sample_t audio_cb;
@@ -27,25 +38,91 @@ static void fallback_log(enum retro_log_level level, const char *fmt, ...) {
 	va_end(va);
 }
 
+void retro_flip(gp_backend *self) {
+	switch (core.backend->pixmap->pixel_type) {
+		case GP_PIXEL_xRGB8888:
+			video_cb(core.backend->pixmap->pixels, core.backend->pixmap->w, core.backend->pixmap->h, core.backend->pixmap->w << 2);
+			break;
+		case GP_PIXEL_RGB565:
+			video_cb(core.backend->pixmap->pixels, core.backend->pixmap->w, core.backend->pixmap->h, core.backend->pixmap->w * sizeof(uint16_t));
+			break;
+	}
+}
+
+/**
+ * Check the input from the frontend, and queue the input into polled events.
+ */
+void retro_poll(gp_backend *self){
+	struct timeval time;
+
+	input_poll_cb();
+
+	time.tv_sec = core.time.deltaMillseconds * 0.001;
+	time.tv_usec = core.time.deltaMillseconds;
+
+	enum gp_event_key_code pushed = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_LEFT);
+	if (pushed != core.input.mouse.left) {
+		gp_event_queue_push_key(&self->event_queue, GP_BTN_LEFT, pushed, &time);
+		core.input.mouse.left = pushed;
+	}
+}
+
+void retro_exit(gp_backend* backend) {
+	environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, 0);
+}
+
+void retro_debug(const struct gp_debug_msg *msg) {
+	int level = RETRO_LOG_INFO;
+	switch (msg->level) {
+		case GP_DEBUG_TODO:
+			level = RETRO_LOG_DEBUG;
+			break;
+		case GP_DEBUG_WARN:
+			level = RETRO_LOG_WARN;
+			break;
+		case GP_DEBUG_BUG:
+			level = RETRO_LOG_ERROR;
+			break;
+		case GP_DEBUG_FATAL:
+			level = RETRO_LOG_ERROR;
+			break;
+	}
+	log_cb(level, msg->msg);
+}
+
 void retro_init(void) {
-	screenWidth = 400;
-	screenHeight = 225;
-	x = screenWidth / 2;
-	y = screenHeight / 2;
 	// TODO: Support GP_PIXEL_xRGB8888 in the settings.
 	gp_pixel_type pixelType = GP_PIXEL_RGB565;
 	struct gp_pixmap pixmap;
 	struct gp_backend virtualBackend;
-	pixmap.w = screenWidth;
-	pixmap.h = screenHeight;
+	pixmap.w = 400;
+	pixmap.h = 225;
 	virtualBackend.pixmap = &pixmap;
 	virtualBackend.fd = -1;
-	backend = gp_backend_virt_init(&virtualBackend, pixelType, 0);
+	gp_set_debug_handler(retro_debug);
+	core.backend = gp_backend_virt_init(&virtualBackend, pixelType, 0);
+	core.backend->name = "libretro";
+	core.backend->flip = retro_flip;
+	core.backend->poll = retro_poll;
+	core.backend->exit = retro_exit;
 }
 
 void retro_deinit(void) {
-	gp_backend_exit(backend);
-	backend = NULL;
+	if (core.backend == NULL) {
+		return;
+	}
+	if (core.backend->pixmap != NULL) {
+		gp_pixmap_free(core.backend->pixmap);
+	}
+
+	if (core.backend->timers != NULL) {
+		free(core.backend->timers);
+	}
+
+	if (core.backend->clipboard_data != NULL) {
+		free(core.backend->clipboard_data);
+	}
+	core.backend = NULL;
 }
 
 unsigned retro_api_version(void) {
@@ -66,20 +143,25 @@ void retro_get_system_info(struct retro_system_info *info) {
 }
 
 void retro_get_system_av_info(struct retro_system_av_info *info) {
-	float aspect = (float)screenWidth / (float)screenHeight;
-
+	if (core.backend == NULL) {
+		return;
+	}
 	info->timing = (struct retro_system_timing) {
 		.fps = 60.0,
 		.sample_rate = 0.0,
 	};
 
 	info->geometry = (struct retro_game_geometry) {
-		.base_width   = screenWidth,
-		.base_height  = screenHeight,
-		.max_width    = screenWidth,
-		.max_height   = screenHeight,
-		.aspect_ratio = aspect
+		.base_width   = core.backend->pixmap->w,
+		.base_height  = core.backend->pixmap->h,
+		.max_width    = core.backend->pixmap->w,
+		.max_height   = core.backend->pixmap->h,
+		.aspect_ratio = (float)core.backend->pixmap->w / (float)core.backend->pixmap->h
 	};
+}
+
+void retro_frametime(retro_usec_t usec) {
+	core.time.deltaMillseconds = usec;
 }
 
 void retro_set_environment(retro_environment_t cb) {
@@ -92,6 +174,13 @@ void retro_set_environment(retro_environment_t cb) {
 		log_cb = logging.log;
 	else
 		log_cb = fallback_log;
+
+	struct retro_frame_time_callback callback;
+	callback.callback = retro_frametime;
+	callback.reference = 0;
+	if (cb(RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK, &callback)) {
+		log_cb(RETRO_LOG_ERROR, "[GFXPrim]: Failed to set frame time callback");
+	}
 }
 
 void retro_set_audio_sample(retro_audio_sample_t cb) {
@@ -118,46 +207,20 @@ void retro_reset(void) {
 	// Reset
 }
 
-static void update_input(void)
-{
-	input_poll_cb();
-	float speed = 0.1f;
-	if (input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP)) {
-		y-= speed;
-	}
-	if (input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN)) {
-		y+= speed;
-	}
-	if (input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT)) {
-		x+= speed;
-	}
-	if (input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT)) {
-		x-= speed;
-	}
-}
-
-static void render(void) {
-	if (backend == NULL) {
+static void render(gp_pixmap* pixmap) {
+	if (pixmap == NULL) {
 		return;
 	}
 
-	gp_pixel red = gp_rgb_to_pixmap_pixel(230, 57, 70, backend->pixmap);
-	gp_pixel white = gp_rgb_to_pixmap_pixel(241, 250, 238, backend->pixmap);
-	gp_pixel blue = gp_rgb_to_pixmap_pixel(69, 123, 157, backend->pixmap);
+	gp_pixel red = gp_rgb_to_pixmap_pixel(230, 57, 70, pixmap);
+	gp_pixel white = gp_rgb_to_pixmap_pixel(241, 250, 238, pixmap);
+	gp_pixel blue = gp_rgb_to_pixmap_pixel(69, 123, 157, pixmap);
 
-	gp_fill(backend->pixmap, white);
-	gp_fill_rect(backend->pixmap, 100, 100, 20, 40, red);
-	gp_fill_circle(backend->pixmap, x, y, 30, blue);
-	gp_line(backend->pixmap, 250, 10, 230, 130, blue);
+	gp_fill(pixmap, white);
 
-	switch (backend->pixmap->pixel_type) {
-		case GP_PIXEL_xRGB8888:
-			video_cb(backend->pixmap->pixels, backend->pixmap->w, backend->pixmap->h, backend->pixmap->w << 2);
-			break;
-		case GP_PIXEL_RGB565:
-			video_cb(backend->pixmap->pixels, backend->pixmap->w, backend->pixmap->h, backend->pixmap->w * sizeof(uint16_t));
-			break;
-	}
+	gp_fill_rect(pixmap, 100, 100, 20, 40, red);
+	gp_fill_circle(pixmap, 200, 150, 30, blue);
+	gp_line(pixmap, 250, 10, 230, 130, blue);
 }
 
 static void check_variables(void) {
@@ -168,9 +231,34 @@ static void audio_callback(void) {
 	audio_cb(0, 0);
 }
 
+void event_loop(gp_backend* backend) {
+	while (gp_backend_events(backend)) {
+		gp_event *ev = gp_backend_get_event(backend);
+
+		switch (ev->type) {
+			case GP_EV_KEY: {
+				if (ev->code != GP_EV_KEY_DOWN)
+					break;
+
+				switch (ev->val) {
+					case GP_BTN_LEFT:
+						gp_backend_exit(backend);
+					break;
+				}
+			}
+		}
+	}
+}
+
 void retro_run(void) {
-	update_input();
-	render();
+	if (core.backend == NULL) {
+		return;
+	}
+
+	gp_backend_poll(core.backend);
+	event_loop(core.backend);
+	render(core.backend->pixmap);
+	gp_backend_flip(core.backend);
 	audio_callback();
 
 	bool updated = false;
@@ -180,12 +268,12 @@ void retro_run(void) {
 }
 
 bool retro_load_game(const struct retro_game_info* info) {
-	if (backend == NULL) {
+	if (core.backend == NULL) {
 		return false;
 	}
 
 	enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
-	if (backend->pixmap->pixel_type == GP_PIXEL_xRGB8888) {
+	if (core.backend->pixmap->pixel_type == GP_PIXEL_xRGB8888) {
 		fmt = RETRO_PIXEL_FORMAT_XRGB8888;
 	}
 
