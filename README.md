@@ -1,14 +1,13 @@
 # libretro-gfxprim
 
-Maybe?
+Perhaps a [gfxprim](https://github.com/gfxprim/gfxprim) libretro core?
 
 ## Compile
 
 1. Ensure dependencies are available:
 	- Python
 
-2. Run the following
+2. Compile
 	```
-	./configure
 	make
 	```

@@ -10,17 +10,12 @@ static retro_log_printf_t log_cb;
 
 struct gfxprim_core {
 	gp_backend * backend;
-	struct {
-		struct {
-			bool left;
-			bool right;
-			int x;
-			int y;
-		} mouse;
-	} input;
-	struct {
-		uint deltaMillseconds;
-	} time;
+
+	uint64_t timeDeltaMilliseconds;
+	int16_t mouseLeft, mouseRight;
+	int16_t mouseX, mouseY;
+	int16_t keyLeft, keyRight, keyUp, keyDown;
+	int16_t keyA, keyB, keySelect, keyStart;
 } core;
 
 static retro_video_refresh_t video_cb;
@@ -49,6 +44,86 @@ void retro_flip(gp_backend *self) {
 	}
 }
 
+void retro_poll_mouse(gp_backend *self, struct timeval* time) {
+	int16_t state = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_LEFT);
+	if (state != core.mouseLeft) {
+		core.mouseLeft = state;
+		gp_event_queue_push_key(&self->event_queue, GP_BTN_LEFT, (uint8_t)state, time);
+	}
+
+	state = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_RIGHT);
+	if (state != core.mouseRight) {
+		core.mouseRight = state;
+		gp_event_queue_push_key(&self->event_queue, GP_BTN_RIGHT, (uint8_t)state, time);
+	}
+
+	state = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_X);
+	int16_t mouseY = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_Y);
+	if (state != 0 || mouseY != 0) {
+		core.mouseX += state;
+		core.mouseY += mouseY;
+		if (core.mouseX < 0) {
+			core.mouseX = 0;
+		}
+		else if (core.mouseX >= self->event_queue.screen_w) {
+			core.mouseX = self->event_queue.screen_w - 1;
+		}
+		if (core.mouseY < 0) {
+			core.mouseY = 0;
+		}
+		else if (core.mouseY >= self->event_queue.screen_h) {
+			core.mouseY = self->event_queue.screen_h - 1;
+		}
+		gp_event_queue_set_cursor_pos(&self->event_queue, core.mouseX, core.mouseY);
+	}
+}
+
+void retro_poll_keyboard(gp_backend *self, struct timeval* time) {
+	// TODO: Add actual gamepad support to GFXPrim?
+	// TODO: Clean this up to be in a loop.
+	int16_t state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT);
+	if (state != core.keyLeft) {
+		core.keyLeft = state;
+		gp_event_queue_push_key(&self->event_queue, GP_KEY_LEFT, (uint8_t)state, time);
+	}
+	state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT);
+	if (state != core.keyRight) {
+		core.keyRight = state;
+		gp_event_queue_push_key(&self->event_queue, GP_KEY_RIGHT, (uint8_t)state, time);
+	}
+	state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP);
+	if (state != core.keyUp) {
+		core.keyLeft = state;
+		gp_event_queue_push_key(&self->event_queue, GP_KEY_UP, (uint8_t)state, time);
+	}
+	state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN);
+	if (state != core.keyDown) {
+		core.keyLeft = state;
+		gp_event_queue_push_key(&self->event_queue, GP_KEY_DOWN, (uint8_t)state, time);
+	}
+	state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A);
+	if (state != core.keyA) {
+		core.keyLeft = state;
+		gp_event_queue_push_key(&self->event_queue, GP_KEY_A, (uint8_t)state, time);
+	}
+	state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B);
+	if (state != core.keyB) {
+		core.keyLeft = state;
+		gp_event_queue_push_key(&self->event_queue, GP_KEY_B, (uint8_t)state, time);
+	}
+	state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT);
+	if (state != core.keySelect) {
+		core.keyLeft = state;
+		gp_event_queue_push_key(&self->event_queue, GP_KEY_RIGHT_SHIFT, (uint8_t)state, time);
+	}
+	state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START);
+	if (state != core.keyStart) {
+		core.keyLeft = state;
+		gp_event_queue_push_key(&self->event_queue, GP_KEY_ENTER, (uint8_t)state, time);
+	}
+	// TODO: Add the actual keyboard input.
+}
+
 /**
  * Check the input from the frontend, and queue the input into polled events.
  */
@@ -57,14 +132,11 @@ void retro_poll(gp_backend *self){
 
 	input_poll_cb();
 
-	time.tv_sec = core.time.deltaMillseconds * 0.001;
-	time.tv_usec = core.time.deltaMillseconds;
+	time.tv_sec = core.timeDeltaMilliseconds * 0.001;
+	time.tv_usec = core.timeDeltaMilliseconds;
 
-	enum gp_event_key_code pushed = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_LEFT);
-	if (pushed != core.input.mouse.left) {
-		gp_event_queue_push_key(&self->event_queue, GP_BTN_LEFT, pushed, &time);
-		core.input.mouse.left = pushed;
-	}
+	retro_poll_mouse(self, &time);
+	retro_poll_keyboard(self, &time);
 }
 
 void retro_exit(gp_backend* backend) {
@@ -87,11 +159,11 @@ void retro_debug(const struct gp_debug_msg *msg) {
 			level = RETRO_LOG_ERROR;
 			break;
 	}
-	log_cb(level, msg->msg);
+	log_cb(level, "[GFXPrim]: %s (%s:%i)\n", msg->msg, msg->file, msg->line);
 }
 
 void retro_init(void) {
-	// TODO: Support GP_PIXEL_xRGB8888 in the settings.
+	// TODO: Allow switching GP_PIXEL_xRGB8888 and GP_PIXEL_RGB565 in the core options.
 	gp_pixel_type pixelType = GP_PIXEL_RGB565;
 	struct gp_pixmap pixmap;
 	struct gp_backend virtualBackend;
@@ -111,6 +183,7 @@ void retro_deinit(void) {
 	if (core.backend == NULL) {
 		return;
 	}
+
 	if (core.backend->pixmap != NULL) {
 		gp_pixmap_free(core.backend->pixmap);
 	}
@@ -122,6 +195,7 @@ void retro_deinit(void) {
 	if (core.backend->clipboard_data != NULL) {
 		free(core.backend->clipboard_data);
 	}
+
 	core.backend = NULL;
 }
 
@@ -139,7 +213,7 @@ void retro_get_system_info(struct retro_system_info *info) {
 	info->library_version  = "v0.0.1";
 	info->block_extract    = true;
 	info->need_fullpath    = false;
-	info->valid_extensions = NULL; // Anything is fine, we don't care.
+	info->valid_extensions = NULL;
 }
 
 void retro_get_system_av_info(struct retro_system_av_info *info) {
@@ -161,7 +235,7 @@ void retro_get_system_av_info(struct retro_system_av_info *info) {
 }
 
 void retro_frametime(retro_usec_t usec) {
-	core.time.deltaMillseconds = usec;
+	core.timeDeltaMilliseconds = usec;
 }
 
 void retro_set_environment(retro_environment_t cb) {
@@ -179,7 +253,7 @@ void retro_set_environment(retro_environment_t cb) {
 	callback.callback = retro_frametime;
 	callback.reference = 0;
 	if (cb(RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK, &callback)) {
-		log_cb(RETRO_LOG_ERROR, "[GFXPrim]: Failed to set frame time callback");
+		log_cb(RETRO_LOG_ERROR, "[GFXPrim]: Failed to set frame time callback\n");
 	}
 }
 
@@ -208,19 +282,22 @@ void retro_reset(void) {
 }
 
 static void render(gp_pixmap* pixmap) {
-	if (pixmap == NULL) {
-		return;
-	}
-
+	gp_pixel black = gp_rgb_to_pixmap_pixel(10, 10, 10, pixmap);
 	gp_pixel red = gp_rgb_to_pixmap_pixel(230, 57, 70, pixmap);
-	gp_pixel white = gp_rgb_to_pixmap_pixel(241, 250, 238, pixmap);
+	gp_pixel white = gp_rgb_to_pixmap_pixel(245, 245, 245, pixmap);
 	gp_pixel blue = gp_rgb_to_pixmap_pixel(69, 123, 157, pixmap);
+	gp_pixel orange = gp_rgb_to_pixmap_pixel(255, 161, 0, pixmap);
 
 	gp_fill(pixmap, white);
 
 	gp_fill_rect(pixmap, 100, 100, 20, 40, red);
 	gp_fill_circle(pixmap, 200, 150, 30, blue);
-	gp_line(pixmap, 250, 10, 230, 130, blue);
+	gp_line(pixmap, 250, 50, 230, 130, blue);
+	gp_fill_triangle(pixmap, 60, 200, 130, 180, 90, 150, orange);
+
+	gp_text(pixmap, NULL, pixmap->w / 2, 10, GP_ALIGN_CENTER | GP_VALIGN_BELOW, black, 0, "Hello World!");
+
+	gp_fill_circle(pixmap, core.mouseX, core.mouseY, 10, core.mouseLeft == 1 ? red : orange);
 }
 
 static void check_variables(void) {
@@ -234,7 +311,6 @@ static void audio_callback(void) {
 void event_loop(gp_backend* backend) {
 	while (gp_backend_events(backend)) {
 		gp_event *ev = gp_backend_get_event(backend);
-
 		switch (ev->type) {
 			case GP_EV_KEY: {
 				if (ev->code != GP_EV_KEY_DOWN)
@@ -242,7 +318,7 @@ void event_loop(gp_backend* backend) {
 
 				switch (ev->val) {
 					case GP_BTN_LEFT:
-						gp_backend_exit(backend);
+						//gp_backend_exit(backend);
 					break;
 				}
 			}
@@ -272,11 +348,11 @@ bool retro_load_game(const struct retro_game_info* info) {
 		return false;
 	}
 
+	// Set the pixel format.
 	enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
 	if (core.backend->pixmap->pixel_type == GP_PIXEL_xRGB8888) {
 		fmt = RETRO_PIXEL_FORMAT_XRGB8888;
 	}
-
 	if (!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt)) {
 		log_cb(RETRO_LOG_ERROR, "[GFXPrim]: Failed to set pixel format\n");
 		return false;

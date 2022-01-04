@@ -223,13 +223,13 @@ else ifeq ($(platform), switch)
 	include $(LIBTRANSISTOR_HOME)/libtransistor.mk
 	HAVE_RZLIB := 1
 	STATIC_LINKING=1
-  
+
 # Classic Platforms ####################
 # Platform affix = classic_<ISA>_<µARCH>
 # Help at https://modmyclassic.com/comp
-	
-# (armv7 a7, hard point, neon based) ### 
-# NESC, SNESC, C64 mini 
+
+# (armv7 a7, hard point, neon based) ###
+# NESC, SNESC, C64 mini
 else ifeq ($(platform), classic_armv7_a7)
 	TARGET := $(TARGET_NAME)_libretro.so
 	fpic := -fPIC
@@ -253,7 +253,7 @@ else ifeq ($(platform), classic_armv7_a7)
 	  endif
 	endif
 #######################################
-	
+
 # CTR/3DS
 else ifeq ($(platform), ctr)
 	TARGET := $(TARGET_NAME)_libretro_$(platform).a
@@ -267,7 +267,7 @@ else ifeq ($(platform), ctr)
 	DISABLE_ERROR_LOGGING := 1
 	ARM = 1
 	STATIC_LINKING=1
-	
+
 # Emscripten
 else ifeq ($(platform), emscripten)
 	TARGET := $(TARGET_NAME)_libretro_$(platform).bc
@@ -307,7 +307,7 @@ else ifeq ($(platform), gcw0)
 	AR = /opt/gcw0-toolchain/usr/bin/mipsel-linux-ar
 	fpic := -fPIC
 	SHARED := -shared -Wl,--version-script=link.T -Wl,-no-undefined
-	
+
 	DISABLE_ERROR_LOGGING := 1
 	CFLAGS += -march=mips32 -mtune=mips32r2 -mhard-float
 
@@ -318,15 +318,15 @@ else ifeq ($(platform), retrofw)
 	AR = /opt/retrofw-toolchain/usr/bin/mipsel-linux-ar
 	fpic := -fPIC
 	SHARED := -shared -Wl,--version-script=link.T -Wl,-no-undefined
-	
+
 	DISABLE_ERROR_LOGGING := 1
 	CFLAGS += -Ofast
 	CFLAGS += -march=mips32 -mtune=mips32 -mhard-float
 	CFLAGS += -falign-functions=1 -falign-jumps=1 -falign-loops=1
-	CFLAGS += -fomit-frame-pointer -ffast-math	
+	CFLAGS += -fomit-frame-pointer -ffast-math
 	CFLAGS += -funsafe-math-optimizations -fsingle-precision-constant -fexpensive-optimizations
 	CFLAGS += -fno-unwind-tables -fno-asynchronous-unwind-tables -fno-unroll-loops
-	
+
 # Windows MSVC 2010 x64
 else ifeq ($(platform), windows_msvc2010_x64)
 	CC  = cl.exe
@@ -406,7 +406,7 @@ export LIB := $(LIB);$(WindowsSDKLibDir)
 	LDFLAGS += -DLL
 	CFLAGS += -D_CRT_SECURE_NO_DEPRECATE
 	LIBS =
-	
+
 # Windows MSVC 2003 Xbox 1
 else ifeq ($(platform), xbox1_msvc2003)
 	TARGET := $(TARGET_NAME)_libretro_xdk1.lib
@@ -440,7 +440,7 @@ TARGET := $(TARGET_NAME)_libretro.dll
 LDFLAGS += -DLL
 CFLAGS += -D_CRT_SECURE_NO_DEPRECATE
 WINDOWS_VERSION=1
-	
+
 # Windows MSVC 2010 Xbox 360
 else ifeq ($(platform), xbox360_msvc2010)
 	TARGET := $(TARGET_NAME)_libretro_xdk360.lib
@@ -544,7 +544,7 @@ else ifneq (,$(findstring windows_msvc2017,$(platform)))
 	ifneq (,$(findstring uwp,$(PlatformSuffix)))
 		LIB := $(LIB);$(shell IFS=$$'\n'; cygpath -w "$(LIB)/store")
 	endif
-    
+
 	export INCLUDE := $(INCLUDE);$(WindowsSDKSharedIncludeDir);$(WindowsSDKUCRTIncludeDir);$(WindowsSDKUMIncludeDir)
 	export LIB := $(LIB);$(WindowsSDKUCRTLibDir);$(WindowsSDKUMLibDir)
 	TARGET := $(TARGET_NAME)_libretro.dll
@@ -604,7 +604,7 @@ CFLAGS	+= -D__LIBRETRO__ $(INCLUDES) $(fpic)
 CXXFLAGS += -D__LIBRETRO__ $(INCLUDES) $(fpic)
 
 OBJOUT   = -o
-LINKOUT  = -o 
+LINKOUT  = -o
 
 ifneq (,$(findstring msvc,$(platform)))
 	OBJOUT = -Fo
@@ -634,8 +634,14 @@ else
 	$(LD) $(LINKOUT)$@ $(SHARED) $(OBJECTS) $(LDFLAGS) $(LIBS)
 endif
 
-%.o: %.c
-	$(CC) -c $(OBJOUT)$@ $< $(CFLAGS) $(INCFLAGS) 
+%.o: %.c vendor/gfxprim/libs/core/gp_blit.gen.c
+	$(CC) -c $(OBJOUT)$@ $< $(CFLAGS) $(INCFLAGS)
+
+vendor/gfxprim/libs/core/gp_blit.gen.c: vendor/gfxprim/config.h
+	$(MAKE) -C vendor/gfxprim gen
+
+vendor/gfxprim/config.h:
+	echo "/* Configuration for GFXPrim */" > vendor/gfxprim/config.h
 
 clean:
 	rm -f $(OBJECTS) $(TARGET)
