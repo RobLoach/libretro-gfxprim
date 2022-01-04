@@ -11,3 +11,7 @@ Perhaps a [gfxprim](https://github.com/gfxprim/gfxprim) libretro core?
 	```
 	make
 	```
+3. Run
+    ```
+	retroarch -L gfxprim_libretro.so
+	```
