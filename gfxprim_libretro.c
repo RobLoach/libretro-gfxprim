@@ -318,7 +318,7 @@ void event_loop(gp_backend* backend) {
 
 				switch (ev->val) {
 					case GP_BTN_LEFT:
-						//gp_backend_exit(backend);
+						gp_backend_exit(backend);
 					break;
 				}
 			}
