@@ -120,14 +120,6 @@ SOURCES_C += $(GFXPRIM_LIBS)/input/gp_event.c \
     $(GFXPRIM_LIBS)/input/gp_timer.c \
     $(GFXPRIM_LIBS)/input/gp_time_stamp.c
 
-SOURCES_C += $(GFXPRIM_LIBS)/utils/gp_block_alloc.c \
-    $(GFXPRIM_LIBS)/utils/gp_fds.c \
-    $(GFXPRIM_LIBS)/utils/gp_htable.c \
-    $(GFXPRIM_LIBS)/utils/gp_json.c \
-    $(GFXPRIM_LIBS)/utils/gp_matrix.c \
-    $(GFXPRIM_LIBS)/utils/gp_vec.c \
-    $(GFXPRIM_LIBS)/utils/gp_vec_str.c
-
 SOURCES_C += $(GFXPRIM_LIBS)/loaders/gp_bmp.c \
 	$(GFXPRIM_LIBS)/loaders/gp_container.c \
 	$(GFXPRIM_LIBS)/loaders/gp_data_storage.c \
@@ -164,3 +156,53 @@ SOURCES_C += $(GFXPRIM_LIBS)/text/gp_default_font.c \
 	$(GFXPRIM_LIBS)/text/gp_text.c \
 	$(GFXPRIM_LIBS)/text/gp_text.gen.c \
 	$(GFXPRIM_LIBS)/text/gp_text_metric.c
+
+SOURCES_C += $(GFXPRIM_LIBS)/utils/gp_block_alloc.c \
+    $(GFXPRIM_LIBS)/utils/gp_fds.c \
+    $(GFXPRIM_LIBS)/utils/gp_htable.c \
+    $(GFXPRIM_LIBS)/utils/gp_json.c \
+    $(GFXPRIM_LIBS)/utils/gp_matrix.c \
+    $(GFXPRIM_LIBS)/utils/gp_vec.c \
+    $(GFXPRIM_LIBS)/utils/gp_vec_str.c
+
+SOURCES_C += $(GFXPRIM_LIBS)/widgets/gp_date_time.c \
+	$(GFXPRIM_LIBS)/widgets/gp_dialog.c \
+	$(GFXPRIM_LIBS)/widgets/gp_dialog_file.c \
+	$(GFXPRIM_LIBS)/widgets/gp_dialog_input.c \
+	$(GFXPRIM_LIBS)/widgets/gp_dialog_msg.c \
+	$(GFXPRIM_LIBS)/widgets/gp_dir_cache.c \
+	$(GFXPRIM_LIBS)/widgets/gp_file_size.c \
+	$(GFXPRIM_LIBS)/widgets/gp_key_repeat_timer.c \
+	$(GFXPRIM_LIBS)/widgets/gp_markup_parser.c \
+	$(GFXPRIM_LIBS)/widgets/gp_string.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_app.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_bool.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_button.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_checkbox.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_choice.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_event.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_frame.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_gfx.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_grid.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_int.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_json.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_label.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_markup.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_ops.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_overlay.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_pbar.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_pixmap.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_radio_button.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_render.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widgets_color_scheme.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_scroll_area.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_size_units.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_spin_button.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_stock.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_switch.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_table.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_tabs.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_tattr.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_tbox.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_timer.c
