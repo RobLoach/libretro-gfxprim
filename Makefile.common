@@ -188,6 +188,7 @@ SOURCES_C += $(GFXPRIM_LIBS)/widgets/gp_date_time.c \
 	$(GFXPRIM_LIBS)/widgets/gp_widget_int.c \
 	$(GFXPRIM_LIBS)/widgets/gp_widget_json.c \
 	$(GFXPRIM_LIBS)/widgets/gp_widget_label.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_log.c \
 	$(GFXPRIM_LIBS)/widgets/gp_widget_markup.c \
 	$(GFXPRIM_LIBS)/widgets/gp_widget_ops.c \
 	$(GFXPRIM_LIBS)/widgets/gp_widget_overlay.c \
