@@ -30,11 +30,17 @@ static void render(gp_pixmap* pixmap) {
 1. Ensure dependencies are available:
 	- Python
 
-2. Compile
+2. Clone the code:
+    ```
+	git clone --recursive https://github.com/RobLoach/libretro-gfxprim.git
+	cd libretro-gfxprim
+	```
+
+3. Compile
 	```
 	make
 	```
-3. Run
+4. Run
     ```
 	retroarch -L gfxprim_libretro.so
 	```

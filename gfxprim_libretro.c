@@ -66,9 +66,15 @@ void retro_flip(gp_backend *self) {
 		case GP_PIXEL_RGB565:
 			video_cb(core->backend->pixmap->pixels, core->backend->pixmap->w, core->backend->pixmap->h, core->backend->pixmap->w * sizeof(uint16_t));
 			break;
+		default:
+			log_cb(RETRO_LOG_WARN, "[GFXPrim]: Unknown pixel format: %i\n", core->backend->pixmap->pixel_type);
+			break;
 	}
 }
 
+/**
+ * Input: Poll all the mouse data into GPXPrim Events.
+ */
 void retro_poll_mouse(gp_backend *self, struct timeval* time) {
 	int16_t state = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_LEFT);
 	if (state != core->mouseLeft) {
@@ -82,6 +88,7 @@ void retro_poll_mouse(gp_backend *self, struct timeval* time) {
 		gp_event_queue_push_key(&self->event_queue, GP_BTN_RIGHT, (uint8_t)state, time);
 	}
 
+	// TODO: Support for Pointer API in addition to Mouse.
 	state = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_X);
 	int16_t mouseY = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_Y);
 	if (state != 0 || mouseY != 0) {
@@ -103,8 +110,12 @@ void retro_poll_mouse(gp_backend *self, struct timeval* time) {
 	}
 }
 
+/**
+ * Input: Poll all the keyboard states into GFXPrim events.
+ */
 void retro_poll_keyboard(gp_backend *self, struct timeval* time) {
 	// TODO: Add actual gamepad support to GFXPrim?
+	// TODO: Add the actual keyboard input, rather than just gamepad input.
 	// TODO: Clean this up to be in a loop.
 	int16_t state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT);
 	if (state != core->keyLeft) {
@@ -146,7 +157,6 @@ void retro_poll_keyboard(gp_backend *self, struct timeval* time) {
 		core->keyLeft = state;
 		gp_event_queue_push_key(&self->event_queue, GP_KEY_ENTER, (uint8_t)state, time);
 	}
-	// TODO: Add the actual keyboard input.
 }
 
 /**
@@ -164,10 +174,16 @@ void retro_poll(gp_backend *self){
 	retro_poll_keyboard(self, &time);
 }
 
+/**
+ * GFXPrim Callback: Exit
+ */
 void retro_exit(gp_backend* backend) {
 	environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, 0);
 }
 
+/**
+ * GFXPrim Callback: Debug Handler
+ */
 void retro_debug(const struct gp_debug_msg *msg) {
 	int level = RETRO_LOG_INFO;
 	switch (msg->level) {
@@ -208,7 +224,7 @@ unsigned retro_api_version(void) {
 }
 
 void retro_set_controller_port_device(unsigned port, unsigned device) {
-	log_cb(RETRO_LOG_INFO, "[GFXPrim]: Plugging device %u into port %u.\n", device, port);
+	log_cb(RETRO_LOG_INFO, "[GFXPrim]: Plugging device %u into port %u\n", device, port);
 }
 
 void retro_get_system_info(struct retro_system_info *info) {
@@ -259,12 +275,14 @@ void retro_set_environment(retro_environment_t cb) {
 		log_cb = fallback_log;
 
 	// Frame time callback
+	/*
 	struct retro_frame_time_callback callback;
 	callback.callback = retro_frametime;
 	callback.reference = 0;
 	if (!cb(RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK, &callback)) {
-		log_cb(RETRO_LOG_ERROR, "[GFXPrim]: Failed to set frame time callback\n");
+		log_cb(RETRO_LOG_WARN, "[GFXPrim]: Failed to set frame time callback\n");
 	}
+	*/
 }
 
 void retro_set_audio_sample(retro_audio_sample_t cb) {
@@ -311,6 +329,7 @@ static void render(gp_pixmap* pixmap) {
 }
 
 static void audio_callback(void) {
+	// TODO: Add audio support
 	audio_cb(0, 0);
 }
 
@@ -337,12 +356,22 @@ void retro_run(void) {
 		return;
 	}
 
+	// Input
 	gp_backend_poll(core->backend);
+
+	// Update the state of the core through an event loop
 	event_loop(core->backend);
+
+	// Render the state to the pixel map
 	render(core->backend->pixmap);
+
+	// Flip the pixel map to the screen
 	gp_backend_flip(core->backend);
+
+	// Process core audio
 	audio_callback();
 
+	// Check if any variables were updated
 	bool updated = false;
 	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated) {
 		check_variables();
@@ -356,6 +385,7 @@ bool retro_load_game(const struct retro_game_info* info) {
 
 	check_variables();
 
+	// GFXPrim Backend
 	struct gp_pixmap pixmap;
 	pixmap.w = 400;
 	pixmap.h = 225;
@@ -379,7 +409,7 @@ bool retro_load_game(const struct retro_game_info* info) {
 		fmt = RETRO_PIXEL_FORMAT_XRGB8888;
 	}
 	if (!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt)) {
-		log_cb(RETRO_LOG_ERROR, "[GFXPrim]: Failed to set pixel format\n");
+		log_cb(RETRO_LOG_ERROR, "[GFXPrim]: Failed to set pixel format %i\n", fmt);
 		return false;
 	}
 
@@ -412,6 +442,8 @@ unsigned retro_get_region(void) {
 }
 
 bool retro_load_game_special(unsigned type, const struct retro_game_info *info, size_t num) {
+	(void)type;
+	(void)num;
 	return retro_load_game(info);
 }
 
@@ -419,11 +451,15 @@ size_t retro_serialize_size(void) {
 	return 0;
 }
 
-bool retro_serialize(void *data_, size_t size) {
+bool retro_serialize(void *data, size_t size) {
+	(void)data;
+	(void)size;
 	return true;
 }
 
-bool retro_unserialize(const void *data_, size_t size) {
+bool retro_unserialize(const void *data, size_t size) {
+	(void)data;
+	(void)size;
 	return true;
 }
 
