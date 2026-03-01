@@ -3,11 +3,6 @@
 #include <string.h>
 
 #include "gfxprim.h"
-
-struct libretro_priv {
-	gp_ev_queue ev_queue;
-};
-
 #include "libretro.h"
 #include "libretro-core-options.h"
 
@@ -16,9 +11,9 @@ static retro_log_printf_t log_cb;
 static retro_perf_get_time_usec_t perf_get_time_usec;
 
 struct gfxprim_core {
-	gp_backend * backend;
+	gp_backend *backend;
+	gp_ev_queue ev_queue;
 
-	uint64_t timeDeltaMilliseconds;
 	int16_t mouseLeft, mouseRight;
 	int16_t mouseX, mouseY;
 	int16_t keyLeft, keyRight, keyUp, keyDown;
@@ -26,11 +21,10 @@ struct gfxprim_core {
 	enum gp_pixel_type pixelType;
 };
 
-struct gfxprim_core* core;
+static struct gfxprim_core *core;
 
 static retro_video_refresh_t video_cb;
 static retro_audio_sample_t audio_cb;
-static retro_audio_sample_batch_t audio_batch_cb;
 static retro_environment_t environ_cb;
 static retro_input_poll_t input_poll_cb;
 static retro_input_state_t input_state_cb;
@@ -43,43 +37,38 @@ static void fallback_log(enum retro_log_level level, const char *fmt, ...) {
 	va_end(va);
 }
 
-void check_variables(void) {
-	if (!core) {
+static void check_variables(void) {
+	if (!core)
 		return;
-	}
 
-	// Update core option from the libretro variables.
 	struct retro_variable var = {0};
 
-	// Pixel Format
 	var.key = "gfxprim_pixelformat";
 	var.value = NULL;
 	core->pixelType = GP_PIXEL_RGB565;
 	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
-		if (strcmp(var.value, "32 Bit") == 0) {
+		if (strcmp(var.value, "32 Bit") == 0)
 			core->pixelType = GP_PIXEL_xRGB8888;
-		}
 	}
 }
 
-void retro_flip(gp_backend *self) {
-	switch (core->backend->pixmap->pixel_type) {
+static void retro_flip(gp_backend *self) {
+	gp_pixmap *pixmap = self->pixmap;
+
+	switch (pixmap->pixel_type) {
 		case GP_PIXEL_xRGB8888:
-			video_cb(core->backend->pixmap->pixels, core->backend->pixmap->w, core->backend->pixmap->h, core->backend->pixmap->w << 2);
+			video_cb(pixmap->pixels, pixmap->w, pixmap->h, pixmap->w << 2);
 			break;
 		case GP_PIXEL_RGB565:
-			video_cb(core->backend->pixmap->pixels, core->backend->pixmap->w, core->backend->pixmap->h, core->backend->pixmap->w * sizeof(uint16_t));
+			video_cb(pixmap->pixels, pixmap->w, pixmap->h, pixmap->w * sizeof(uint16_t));
 			break;
 		default:
-			log_cb(RETRO_LOG_WARN, "[GFXPrim]: Unknown pixel format: %i\n", core->backend->pixmap->pixel_type);
+			log_cb(RETRO_LOG_WARN, "[GFXPrim]: Unknown pixel format: %i\n", pixmap->pixel_type);
 			break;
 	}
 }
 
-/**
- * Input: Poll all the mouse data into GPXPrim Events.
- */
-void retro_poll_mouse(gp_backend *self, uint64_t time) {
+static void retro_poll_mouse(gp_backend *self, uint64_t time) {
 	int16_t state = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_LEFT);
 	if (state != core->mouseLeft) {
 		core->mouseLeft = state;
@@ -93,34 +82,26 @@ void retro_poll_mouse(gp_backend *self, uint64_t time) {
 	}
 
 	// TODO: Support for Pointer API in addition to Mouse.
-	state = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_X);
+	int16_t mouseX = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_X);
 	int16_t mouseY = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_Y);
-	if (state != 0 || mouseY != 0) {
-		core->mouseX += state;
+	if (mouseX != 0 || mouseY != 0) {
+		core->mouseX += mouseX;
 		core->mouseY += mouseY;
-		if (core->mouseX < 0) {
+		if (core->mouseX < 0)
 			core->mouseX = 0;
-		}
-		else if (core->mouseX >= self->event_queue->screen_w) {
+		else if (core->mouseX >= (int16_t)self->event_queue->screen_w)
 			core->mouseX = self->event_queue->screen_w - 1;
-		}
-		if (core->mouseY < 0) {
+		if (core->mouseY < 0)
 			core->mouseY = 0;
-		}
-		else if (core->mouseY >= self->event_queue->screen_h) {
+		else if (core->mouseY >= (int16_t)self->event_queue->screen_h)
 			core->mouseY = self->event_queue->screen_h - 1;
-		}
 		gp_ev_queue_set_cursor_pos(self->event_queue, core->mouseX, core->mouseY);
 	}
 }
 
-/**
- * Input: Poll all the keyboard states into GFXPrim events.
- */
-void retro_poll_keyboard(gp_backend *self, uint64_t time) {
+static void retro_poll_keyboard(gp_backend *self, uint64_t time) {
 	// TODO: Add actual gamepad support to GFXPrim?
 	// TODO: Add the actual keyboard input, rather than just gamepad input.
-	// TODO: Clean this up to be in a loop.
 	int16_t state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT);
 	if (state != core->keyLeft) {
 		core->keyLeft = state;
@@ -163,59 +144,39 @@ void retro_poll_keyboard(gp_backend *self, uint64_t time) {
 	}
 }
 
-/**
- * Check the input from the frontend, and queue the input into polled events.
- */
-void retro_poll(gp_backend *self){
+static void retro_poll(gp_backend *self) {
 	input_poll_cb();
-
 	uint64_t time = gp_time_stamp();
-
 	retro_poll_mouse(self, time);
 	retro_poll_keyboard(self, time);
 }
 
-/**
- * GFXPrim Callback: Exit
- */
-void retro_exit(gp_backend* backend) {
+static void retro_exit(gp_backend *backend) {
+	(void)backend;
 	environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, 0);
 }
 
-/**
- * GFXPrim Callback: Debug Handler
- */
-void retro_debug(const struct gp_debug_msg *msg) {
+static void retro_debug(const struct gp_debug_msg *msg) {
 	int level = RETRO_LOG_INFO;
 	switch (msg->level) {
-		case GP_DEBUG_TODO:
-			level = RETRO_LOG_DEBUG;
-			break;
-		case GP_DEBUG_WARN:
-			level = RETRO_LOG_WARN;
-			break;
-		case GP_DEBUG_BUG:
-			level = RETRO_LOG_ERROR;
-			break;
-		case GP_DEBUG_FATAL:
-			level = RETRO_LOG_ERROR;
-			break;
+		case GP_DEBUG_TODO:  level = RETRO_LOG_DEBUG; break;
+		case GP_DEBUG_WARN:  level = RETRO_LOG_WARN;  break;
+		case GP_DEBUG_BUG:   level = RETRO_LOG_ERROR; break;
+		case GP_DEBUG_FATAL: level = RETRO_LOG_ERROR; break;
 	}
 	log_cb(level, "[GFXPrim]: %s (%s:%i)\n", msg->msg, msg->file, msg->line);
 }
 
 void retro_init(void) {
 	if (core == NULL) {
-		core = malloc(sizeof(struct gfxprim_core));
+		core = calloc(1, sizeof(struct gfxprim_core));
+		if (!core)
+			return;
 		core->pixelType = GP_PIXEL_RGB565;
 	}
 }
 
 void retro_deinit(void) {
-	if (!core || core->backend == NULL) {
-		return;
-	}
-
 	free(core);
 	core = NULL;
 }
@@ -238,9 +199,9 @@ void retro_get_system_info(struct retro_system_info *info) {
 }
 
 void retro_get_system_av_info(struct retro_system_av_info *info) {
-	if (core->backend == NULL) {
+	if (!core || !core->backend)
 		return;
-	}
+
 	info->timing = (struct retro_system_timing) {
 		.fps = 60.0,
 		.sample_rate = 0.0,
@@ -251,44 +212,26 @@ void retro_get_system_av_info(struct retro_system_av_info *info) {
 		.base_height  = core->backend->pixmap->h,
 		.max_width    = core->backend->pixmap->w,
 		.max_height   = core->backend->pixmap->h,
-		.aspect_ratio = (float)core->backend->pixmap->w / (float)core->backend->pixmap->h
+		.aspect_ratio = (float)core->backend->pixmap->w / (float)core->backend->pixmap->h,
 	};
-}
-
-void retro_frametime(retro_usec_t usec) {
-	core->timeDeltaMilliseconds = usec;
 }
 
 void retro_set_environment(retro_environment_t cb) {
 	environ_cb = cb;
 
-	// Configure the core options.
 	libretro_set_core_options(cb);
 
-	// No Game
 	bool no_content = true;
 	cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &no_content);
 
-	// Logging
 	if (cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &logging))
 		log_cb = logging.log;
 	else
 		log_cb = fallback_log;
 
-	// Perf interface (used for gp_time_stamp)
 	struct retro_perf_callback perf;
 	if (cb(RETRO_ENVIRONMENT_GET_PERF_INTERFACE, &perf))
 		perf_get_time_usec = perf.get_time_usec;
-
-	// Frame time callback
-	/*
-	struct retro_frame_time_callback callback;
-	callback.callback = retro_frametime;
-	callback.reference = 0;
-	if (!cb(RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK, &callback)) {
-		log_cb(RETRO_LOG_WARN, "[GFXPrim]: Failed to set frame time callback\n");
-	}
-	*/
 }
 
 void retro_set_audio_sample(retro_audio_sample_t cb) {
@@ -296,7 +239,7 @@ void retro_set_audio_sample(retro_audio_sample_t cb) {
 }
 
 void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb) {
-	audio_batch_cb = cb;
+	(void)cb;
 }
 
 void retro_set_input_poll(retro_input_poll_t cb) {
@@ -312,15 +255,14 @@ void retro_set_video_refresh(retro_video_refresh_t cb) {
 }
 
 void retro_reset(void) {
-	// Reset
 }
 
-static void render(gp_pixmap* pixmap) {
-	gp_pixel black = gp_rgb_to_pixmap_pixel(10, 10, 10, pixmap);
-	gp_pixel red = gp_rgb_to_pixmap_pixel(230, 57, 70, pixmap);
-	gp_pixel white = gp_rgb_to_pixmap_pixel(245, 245, 245, pixmap);
-	gp_pixel blue = gp_rgb_to_pixmap_pixel(69, 123, 157, pixmap);
-	gp_pixel orange = gp_rgb_to_pixmap_pixel(255, 161, 0, pixmap);
+static void render(gp_pixmap *pixmap) {
+	gp_pixel black  = gp_rgb_to_pixmap_pixel(10,  10,  10,  pixmap);
+	gp_pixel red    = gp_rgb_to_pixmap_pixel(230, 57,  70,  pixmap);
+	gp_pixel white  = gp_rgb_to_pixmap_pixel(245, 245, 245, pixmap);
+	gp_pixel blue   = gp_rgb_to_pixmap_pixel(69,  123, 157, pixmap);
+	gp_pixel orange = gp_rgb_to_pixmap_pixel(255, 161, 0,   pixmap);
 
 	gp_fill(pixmap, white);
 
@@ -334,81 +276,58 @@ static void render(gp_pixmap* pixmap) {
 	gp_fill_circle(pixmap, core->mouseX, core->mouseY, 10, core->mouseLeft == 1 ? red : orange);
 }
 
-static void audio_callback(void) {
-	// TODO: Add audio support
-	audio_cb(0, 0);
-}
-
-void event_loop(gp_backend* backend) {
+static void event_loop(gp_backend *backend) {
 	while (gp_backend_ev_queued(backend)) {
 		gp_event *ev = gp_backend_ev_get(backend);
 		switch (ev->type) {
-			case GP_EV_KEY: {
+			case GP_EV_KEY:
 				if (ev->code != GP_EV_KEY_DOWN)
 					break;
-
 				switch (ev->val) {
 					case GP_BTN_LEFT:
-						// gp_backend_exit(backend);
 					break;
 				}
-			}
+			break;
 		}
 	}
 }
 
 void retro_run(void) {
-	if (core == NULL || core->backend == NULL) {
+	if (!core || !core->backend)
 		return;
-	}
 
-	// Input
 	gp_backend_poll(core->backend);
-
-	// Update the state of the core through an event loop
 	event_loop(core->backend);
-
-	// Render the state to the pixel map
 	render(core->backend->pixmap);
-
-	// Flip the pixel map to the screen
 	gp_backend_flip(core->backend);
 
-	// Process core audio
-	audio_callback();
+	audio_cb(0, 0);
 
-	// Check if any variables were updated
 	bool updated = false;
-	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated) {
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated)
 		check_variables();
-	}
 }
 
-bool retro_load_game(const struct retro_game_info* info) {
-	if (core == NULL) {
+bool retro_load_game(const struct retro_game_info *info) {
+	(void)info;
+
+	if (!core)
 		return false;
-	}
 
 	check_variables();
-
-	// GFXPrim Backend
 	gp_set_debug_handler(retro_debug);
 
-	size_t size = sizeof(gp_backend) + sizeof(struct libretro_priv);
-	gp_backend *backend = malloc(size);
-	if (!backend) {
+	gp_backend *backend = calloc(1, sizeof(gp_backend));
+	if (!backend)
 		return false;
-	}
-	memset(backend, 0, size);
 
-	struct libretro_priv *priv = GP_BACKEND_PRIV(backend);
 	backend->pixmap = gp_pixmap_alloc(400, 225, core->pixelType);
 	if (!backend->pixmap) {
 		free(backend);
 		return false;
 	}
 
-	backend->event_queue = &priv->ev_queue;
+	backend->event_queue = &core->ev_queue;
 	gp_ev_queue_init(backend->event_queue, 400, 225, 0, NULL, NULL, 0);
 
 	backend->name = "libretro";
@@ -418,24 +337,24 @@ bool retro_load_game(const struct retro_game_info* info) {
 
 	core->backend = backend;
 
-	// Set the pixel format.
 	enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
-	if (core->backend->pixmap->pixel_type == GP_PIXEL_xRGB8888) {
+	if (core->backend->pixmap->pixel_type == GP_PIXEL_xRGB8888)
 		fmt = RETRO_PIXEL_FORMAT_XRGB8888;
-	}
+
 	if (!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt)) {
 		log_cb(RETRO_LOG_ERROR, "[GFXPrim]: Failed to set pixel format %i\n", fmt);
+		gp_pixmap_free(core->backend->pixmap);
+		free(core->backend);
+		core->backend = NULL;
 		return false;
 	}
 
-	(void)info;
 	return true;
 }
 
 void retro_unload_game(void) {
-	if (!core || !core->backend) {
+	if (!core || !core->backend)
 		return;
-	}
 
 	gp_pixmap_free(core->backend->pixmap);
 	free(core->backend);
@@ -452,9 +371,7 @@ bool retro_load_game_special(unsigned type, const struct retro_game_info *info, 
 	return retro_load_game(info);
 }
 
-size_t retro_serialize_size(void) {
-	return 0;
-}
+size_t retro_serialize_size(void) { return 0; }
 
 bool retro_serialize(void *data, size_t size) {
 	(void)data;
@@ -468,67 +385,28 @@ bool retro_unserialize(const void *data, size_t size) {
 	return true;
 }
 
-void *retro_get_memory_data(unsigned id) {
-	(void)id;
-	return NULL;
-}
-
-size_t retro_get_memory_size(unsigned id) {
-	(void)id;
-	return 0;
-}
-
-void retro_cheat_reset(void) {
-	// Cheat reset
-}
-
-void retro_cheat_set(unsigned index, bool enabled, const char *code)
-{
+void *retro_get_memory_data(unsigned id) { (void)id; return NULL; }
+size_t retro_get_memory_size(unsigned id) { (void)id; return 0; }
+void retro_cheat_reset(void) {}
+void retro_cheat_set(unsigned index, bool enabled, const char *code) {
 	(void)index;
 	(void)enabled;
 	(void)code;
 }
 
-/**
- * Polling System
- *
- * Polling is not used in the libretro backend.
+/*
+ * gp_poll — FD-based polling is not used in the libretro backend.
  * The frontend drives the main loop, so all poll functions are no-ops.
- *
- * TODO: Figure out if we need to emulate the poll system.
  */
-void gp_poll_clear(gp_poll *self) {
-	(void)self;
-}
+void   gp_poll_clear(gp_poll *self) { (void)self; }
+int    gp_poll_add(gp_poll *self, gp_fd *fd) { (void)self; (void)fd; return 0; }
+int    gp_poll_rem(gp_poll *self, gp_fd *fd) { (void)self; (void)fd; return 0; }
+gp_fd *gp_poll_rem_by_fd(gp_poll *self, int fd) { (void)self; (void)fd; return NULL; }
+int    gp_poll_wait(gp_poll *self, int timeout_ms) { (void)self; (void)timeout_ms; return 0; }
 
-int  gp_poll_add(gp_poll *self, gp_fd *fd) {
-	(void)self;
-	(void)fd;
-	return 0;
-}
-
-int  gp_poll_rem(gp_poll *self, gp_fd *fd) {
-	(void)self;
-	(void)fd;
-	return 0;
-}
-
-gp_fd *gp_poll_rem_by_fd(gp_poll *self, int fd) {
-	(void)self;
-	(void)fd;
-	return NULL;
-}
-
-int  gp_poll_wait(gp_poll *self, int timeout_ms) {
-	(void)self;
-	(void)timeout_ms;
-	return 0;
-}
-
-/**
- * @brief Returns current time stamp using the libretro API.
- *
- * @return A monotonously incrementing timestamp starting at some unspecified point in milliseconds.
+/*
+ * gp_time_stamp — uses the libretro perf interface.
+ * get_time_usec returns microseconds; divide by 1000 for milliseconds.
  */
 uint64_t gp_time_stamp(void)
 {
