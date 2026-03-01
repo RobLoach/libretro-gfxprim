@@ -115,9 +115,7 @@ SOURCES_C += \
     $(GFXPRIM_LIBS)/input/gp_event.c \
     $(GFXPRIM_LIBS)/input/gp_keymap.c \
     $(GFXPRIM_LIBS)/input/gp_keys.c \
-    $(GFXPRIM_LIBS)/input/gp_task.c \
-    $(GFXPRIM_LIBS)/input/linux/gp_time_stamp.c \
-    $(GFXPRIM_LIBS)/utils/linux/gp_poll.c
+    $(GFXPRIM_LIBS)/input/gp_task.c
 
 SOURCES_C += \
     $(GFXPRIM_LIBS)/loaders/gp_bmp.c \

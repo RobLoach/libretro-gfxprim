@@ -13,6 +13,7 @@ struct libretro_priv {
 
 static struct retro_log_callback logging;
 static retro_log_printf_t log_cb;
+static retro_perf_get_time_usec_t perf_get_time_usec;
 
 struct gfxprim_core {
 	gp_backend * backend;
@@ -274,6 +275,11 @@ void retro_set_environment(retro_environment_t cb) {
 	else
 		log_cb = fallback_log;
 
+	// Perf interface (used for gp_time_stamp)
+	struct retro_perf_callback perf;
+	if (cb(RETRO_ENVIRONMENT_GET_PERF_INTERFACE, &perf))
+		perf_get_time_usec = perf.get_time_usec;
+
 	// Frame time callback
 	/*
 	struct retro_frame_time_callback callback;
@@ -481,4 +487,53 @@ void retro_cheat_set(unsigned index, bool enabled, const char *code)
 	(void)index;
 	(void)enabled;
 	(void)code;
+}
+
+/**
+ * Polling System
+ *
+ * Polling is not used in the libretro backend.
+ * The frontend drives the main loop, so all poll functions are no-ops.
+ *
+ * TODO: Figure out if we need to emulate the poll system.
+ */
+void gp_poll_clear(gp_poll *self) {
+	(void)self;
+}
+
+int  gp_poll_add(gp_poll *self, gp_fd *fd) {
+	(void)self;
+	(void)fd;
+	return 0;
+}
+
+int  gp_poll_rem(gp_poll *self, gp_fd *fd) {
+	(void)self;
+	(void)fd;
+	return 0;
+}
+
+gp_fd *gp_poll_rem_by_fd(gp_poll *self, int fd) {
+	(void)self;
+	(void)fd;
+	return NULL;
+}
+
+int  gp_poll_wait(gp_poll *self, int timeout_ms) {
+	(void)self;
+	(void)timeout_ms;
+	return 0;
+}
+
+/**
+ * @brief Returns current time stamp using the libretro API.
+ *
+ * @return A monotonously incrementing timestamp starting at some unspecified point in milliseconds.
+ */
+uint64_t gp_time_stamp(void)
+{
+	if (perf_get_time_usec)
+		return (uint64_t)perf_get_time_usec() / 1000;
+
+	return 0;
 }
