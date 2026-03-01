@@ -2,8 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "backends/gp_backend_virtual.h"
 #include "gfxprim.h"
+
+struct libretro_priv {
+	gp_ev_queue ev_queue;
+};
 
 #include "libretro.h"
 #include "libretro-core-options.h"
@@ -75,17 +78,17 @@ void retro_flip(gp_backend *self) {
 /**
  * Input: Poll all the mouse data into GPXPrim Events.
  */
-void retro_poll_mouse(gp_backend *self, struct timeval* time) {
+void retro_poll_mouse(gp_backend *self, uint64_t time) {
 	int16_t state = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_LEFT);
 	if (state != core->mouseLeft) {
 		core->mouseLeft = state;
-		gp_event_queue_push_key(&self->event_queue, GP_BTN_LEFT, (uint8_t)state, time);
+		gp_ev_queue_push_key(self->event_queue, GP_BTN_LEFT, (uint8_t)state, 0, time);
 	}
 
 	state = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_RIGHT);
 	if (state != core->mouseRight) {
 		core->mouseRight = state;
-		gp_event_queue_push_key(&self->event_queue, GP_BTN_RIGHT, (uint8_t)state, time);
+		gp_ev_queue_push_key(self->event_queue, GP_BTN_RIGHT, (uint8_t)state, 0, time);
 	}
 
 	// TODO: Support for Pointer API in addition to Mouse.
@@ -97,65 +100,65 @@ void retro_poll_mouse(gp_backend *self, struct timeval* time) {
 		if (core->mouseX < 0) {
 			core->mouseX = 0;
 		}
-		else if (core->mouseX >= self->event_queue.screen_w) {
-			core->mouseX = self->event_queue.screen_w - 1;
+		else if (core->mouseX >= self->event_queue->screen_w) {
+			core->mouseX = self->event_queue->screen_w - 1;
 		}
 		if (core->mouseY < 0) {
 			core->mouseY = 0;
 		}
-		else if (core->mouseY >= self->event_queue.screen_h) {
-			core->mouseY = self->event_queue.screen_h - 1;
+		else if (core->mouseY >= self->event_queue->screen_h) {
+			core->mouseY = self->event_queue->screen_h - 1;
 		}
-		gp_event_queue_set_cursor_pos(&self->event_queue, core->mouseX, core->mouseY);
+		gp_ev_queue_set_cursor_pos(self->event_queue, core->mouseX, core->mouseY);
 	}
 }
 
 /**
  * Input: Poll all the keyboard states into GFXPrim events.
  */
-void retro_poll_keyboard(gp_backend *self, struct timeval* time) {
+void retro_poll_keyboard(gp_backend *self, uint64_t time) {
 	// TODO: Add actual gamepad support to GFXPrim?
 	// TODO: Add the actual keyboard input, rather than just gamepad input.
 	// TODO: Clean this up to be in a loop.
 	int16_t state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT);
 	if (state != core->keyLeft) {
 		core->keyLeft = state;
-		gp_event_queue_push_key(&self->event_queue, GP_KEY_LEFT, (uint8_t)state, time);
+		gp_ev_queue_push_key(self->event_queue, GP_KEY_LEFT, (uint8_t)state, 0, time);
 	}
 	state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT);
 	if (state != core->keyRight) {
 		core->keyRight = state;
-		gp_event_queue_push_key(&self->event_queue, GP_KEY_RIGHT, (uint8_t)state, time);
+		gp_ev_queue_push_key(self->event_queue, GP_KEY_RIGHT, (uint8_t)state, 0, time);
 	}
 	state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP);
 	if (state != core->keyUp) {
-		core->keyLeft = state;
-		gp_event_queue_push_key(&self->event_queue, GP_KEY_UP, (uint8_t)state, time);
+		core->keyUp = state;
+		gp_ev_queue_push_key(self->event_queue, GP_KEY_UP, (uint8_t)state, 0, time);
 	}
 	state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN);
 	if (state != core->keyDown) {
-		core->keyLeft = state;
-		gp_event_queue_push_key(&self->event_queue, GP_KEY_DOWN, (uint8_t)state, time);
+		core->keyDown = state;
+		gp_ev_queue_push_key(self->event_queue, GP_KEY_DOWN, (uint8_t)state, 0, time);
 	}
 	state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A);
 	if (state != core->keyA) {
-		core->keyLeft = state;
-		gp_event_queue_push_key(&self->event_queue, GP_KEY_A, (uint8_t)state, time);
+		core->keyA = state;
+		gp_ev_queue_push_key(self->event_queue, GP_KEY_A, (uint8_t)state, 0, time);
 	}
 	state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B);
 	if (state != core->keyB) {
-		core->keyLeft = state;
-		gp_event_queue_push_key(&self->event_queue, GP_KEY_B, (uint8_t)state, time);
+		core->keyB = state;
+		gp_ev_queue_push_key(self->event_queue, GP_KEY_B, (uint8_t)state, 0, time);
 	}
 	state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT);
 	if (state != core->keySelect) {
-		core->keyLeft = state;
-		gp_event_queue_push_key(&self->event_queue, GP_KEY_RIGHT_SHIFT, (uint8_t)state, time);
+		core->keySelect = state;
+		gp_ev_queue_push_key(self->event_queue, GP_KEY_RIGHT_SHIFT, (uint8_t)state, 0, time);
 	}
 	state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START);
 	if (state != core->keyStart) {
-		core->keyLeft = state;
-		gp_event_queue_push_key(&self->event_queue, GP_KEY_ENTER, (uint8_t)state, time);
+		core->keyStart = state;
+		gp_ev_queue_push_key(self->event_queue, GP_KEY_ENTER, (uint8_t)state, 0, time);
 	}
 }
 
@@ -163,15 +166,12 @@ void retro_poll_keyboard(gp_backend *self, struct timeval* time) {
  * Check the input from the frontend, and queue the input into polled events.
  */
 void retro_poll(gp_backend *self){
-	struct timeval time;
-
 	input_poll_cb();
 
-	time.tv_sec = core->timeDeltaMilliseconds * 0.001;
-	time.tv_usec = core->timeDeltaMilliseconds;
+	uint64_t time = gp_time_stamp();
 
-	retro_poll_mouse(self, &time);
-	retro_poll_keyboard(self, &time);
+	retro_poll_mouse(self, time);
+	retro_poll_keyboard(self, time);
 }
 
 /**
@@ -334,8 +334,8 @@ static void audio_callback(void) {
 }
 
 void event_loop(gp_backend* backend) {
-	while (gp_backend_events(backend)) {
-		gp_event *ev = gp_backend_get_event(backend);
+	while (gp_backend_ev_queued(backend)) {
+		gp_event *ev = gp_backend_ev_get(backend);
 		switch (ev->type) {
 			case GP_EV_KEY: {
 				if (ev->code != GP_EV_KEY_DOWN)
@@ -386,22 +386,31 @@ bool retro_load_game(const struct retro_game_info* info) {
 	check_variables();
 
 	// GFXPrim Backend
-	struct gp_pixmap pixmap;
-	pixmap.w = 400;
-	pixmap.h = 225;
-	struct gp_backend virtualBackend;
-	virtualBackend.pixmap = &pixmap;
-	virtualBackend.fd = -1;
 	gp_set_debug_handler(retro_debug);
-	core->backend = gp_backend_virt_init(&virtualBackend, core->pixelType, 0);
-	if (core->backend == NULL) {
+
+	size_t size = sizeof(gp_backend) + sizeof(struct libretro_priv);
+	gp_backend *backend = malloc(size);
+	if (!backend) {
+		return false;
+	}
+	memset(backend, 0, size);
+
+	struct libretro_priv *priv = GP_BACKEND_PRIV(backend);
+	backend->pixmap = gp_pixmap_alloc(400, 225, core->pixelType);
+	if (!backend->pixmap) {
+		free(backend);
 		return false;
 	}
 
-	core->backend->name = "libretro";
-	core->backend->flip = retro_flip;
-	core->backend->poll = retro_poll;
-	core->backend->exit = retro_exit;
+	backend->event_queue = &priv->ev_queue;
+	gp_ev_queue_init(backend->event_queue, 400, 225, 0, NULL, NULL, 0);
+
+	backend->name = "libretro";
+	backend->flip = retro_flip;
+	backend->poll = retro_poll;
+	backend->exit = retro_exit;
+
+	core->backend = backend;
 
 	// Set the pixel format.
 	enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
@@ -421,18 +430,8 @@ void retro_unload_game(void) {
 	if (!core || !core->backend) {
 		return;
 	}
-	if (core->backend->pixmap != NULL) {
-		gp_pixmap_free(core->backend->pixmap);
-	}
 
-	if (core->backend->timers != NULL) {
-		free(core->backend->timers);
-	}
-
-	if (core->backend->clipboard_data != NULL) {
-		free(core->backend->clipboard_data);
-	}
-
+	gp_pixmap_free(core->backend->pixmap);
 	free(core->backend);
 	core->backend = NULL;
 }
