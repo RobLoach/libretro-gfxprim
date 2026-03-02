@@ -168,12 +168,14 @@ static void retro_debug(const struct gp_debug_msg *msg) {
 }
 
 void retro_init(void) {
-	if (core == NULL) {
-		core = calloc(1, sizeof(struct gfxprim_core));
-		if (!core)
-			return;
-		core->pixelType = GP_PIXEL_RGB565;
-	}
+	if (core != NULL)
+		return;
+
+	core = calloc(1, sizeof(struct gfxprim_core));
+	if (!core)
+		return;
+
+	core->pixelType = GP_PIXEL_RGB565;
 }
 
 void retro_deinit(void) {
@@ -193,7 +195,7 @@ void retro_get_system_info(struct retro_system_info *info) {
 	memset(info, 0, sizeof(*info));
 	info->library_name     = "gfxprim";
 	info->library_version  = "v0.0.1";
-	info->block_extract    = true;
+	info->block_extract    = false;
 	info->need_fullpath    = false;
 	info->valid_extensions = NULL;
 }
