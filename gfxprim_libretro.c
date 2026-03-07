@@ -60,10 +60,8 @@ static void retro_flip(gp_backend *self) {
 			video_cb(pixmap->pixels, pixmap->w, pixmap->h, pixmap->w << 2);
 			break;
 		case GP_PIXEL_RGB565:
-			video_cb(pixmap->pixels, pixmap->w, pixmap->h, pixmap->w * sizeof(uint16_t));
-			break;
 		default:
-			log_cb(RETRO_LOG_WARN, "[GFXPrim]: Unknown pixel format: %i\n", pixmap->pixel_type);
+			video_cb(pixmap->pixels, pixmap->w, pixmap->h, pixmap->w * sizeof(uint16_t));
 			break;
 	}
 }
