@@ -14,8 +14,9 @@ struct gfxprim_core {
 	gp_backend *backend;
 	gp_ev_queue ev_queue;
 
-	int16_t mouseLeft, mouseRight;
+	int16_t mouseLeft, mouseRight, mouseMiddle;
 	int16_t mouseX, mouseY;
+	unsigned mouseDevice;
 	int16_t keyLeft, keyRight, keyUp, keyDown;
 	int16_t keyA, keyB, keySelect, keyStart;
 	enum gp_pixel_type pixelType;
@@ -43,12 +44,22 @@ static void check_variables(void) {
 
 	struct retro_variable var = {0};
 
+	// Pixel Format
 	var.key = "gfxprim_pixelformat";
 	var.value = NULL;
 	core->pixelType = GP_PIXEL_RGB565;
 	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
 		if (strcmp(var.value, "32 Bit") == 0)
 			core->pixelType = GP_PIXEL_xRGB8888;
+	}
+
+	// Mouse Device
+	var.key = "gfxprim_mouse_device";
+	var.value = NULL;
+	core->mouseDevice = RETRO_DEVICE_MOUSE;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		if (strcmp(var.value, "Pointer") == 0)
+			core->mouseDevice = RETRO_DEVICE_POINTER;
 	}
 }
 
@@ -67,19 +78,24 @@ static void retro_flip(gp_backend *self) {
 }
 
 static void retro_poll_mouse(gp_backend *self, uint64_t time) {
+	// Buttons
 	int16_t state = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_LEFT);
 	if (state != core->mouseLeft) {
 		core->mouseLeft = state;
 		gp_ev_queue_push_key(self->event_queue, GP_BTN_LEFT, (uint8_t)state, 0, time);
 	}
-
 	state = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_RIGHT);
 	if (state != core->mouseRight) {
 		core->mouseRight = state;
 		gp_ev_queue_push_key(self->event_queue, GP_BTN_RIGHT, (uint8_t)state, 0, time);
 	}
+	state = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_MIDDLE);
+	if (state != core->mouseMiddle) {
+		core->mouseMiddle = state;
+		gp_ev_queue_push_key(self->event_queue, GP_BTN_MIDDLE, (uint8_t)state, 0, time);
+	}
 
-	// TODO: Support for Pointer API in addition to Mouse.
+	// Position
 	int16_t mouseX = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_X);
 	int16_t mouseY = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_Y);
 	if (mouseX != 0 || mouseY != 0) {
@@ -93,6 +109,36 @@ static void retro_poll_mouse(gp_backend *self, uint64_t time) {
 			core->mouseY = 0;
 		else if (core->mouseY >= (int16_t)self->event_queue->screen_h)
 			core->mouseY = self->event_queue->screen_h - 1;
+		gp_ev_queue_set_cursor_pos(self->event_queue, core->mouseX, core->mouseY);
+	}
+}
+
+static void retro_poll_pointer(gp_backend *self, uint64_t time) {
+	// Button
+	int16_t state = input_state_cb(0, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_PRESSED);
+	if (state != core->mouseLeft) {
+		core->mouseLeft = state;
+		gp_ev_queue_push_key(self->event_queue, GP_BTN_LEFT, (uint8_t)state, 0, time);
+	}
+	state = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_RIGHT);
+	if (state != core->mouseRight) {
+		core->mouseRight = state;
+		gp_ev_queue_push_key(self->event_queue, GP_BTN_RIGHT, (uint8_t)state, 0, time);
+	}
+	state = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_MIDDLE);
+	if (state != core->mouseMiddle) {
+		core->mouseMiddle = state;
+		gp_ev_queue_push_key(self->event_queue, GP_BTN_MIDDLE, (uint8_t)state, 0, time);
+	}
+
+	// Position
+	int16_t px = input_state_cb(0, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_X);
+	int16_t py = input_state_cb(0, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_Y);
+	int16_t screenX = (int16_t)((px + 0x7fff) * (self->event_queue->screen_w - 1) / (2 * 0x7fff));
+	int16_t screenY = (int16_t)((py + 0x7fff) * (self->event_queue->screen_h - 1) / (2 * 0x7fff));
+	if (screenX != core->mouseX || screenY != core->mouseY) {
+		core->mouseX = screenX;
+		core->mouseY = screenY;
 		gp_ev_queue_set_cursor_pos(self->event_queue, core->mouseX, core->mouseY);
 	}
 }
@@ -145,7 +191,10 @@ static void retro_poll_keyboard(gp_backend *self, uint64_t time) {
 static void retro_poll(gp_backend *self) {
 	input_poll_cb();
 	uint64_t time = gp_time_stamp();
-	retro_poll_mouse(self, time);
+	if (core->mouseDevice == RETRO_DEVICE_MOUSE)
+		retro_poll_mouse(self, time);
+	else
+		retro_poll_pointer(self, time);
 	retro_poll_keyboard(self, time);
 }
 
