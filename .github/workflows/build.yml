@@ -1,0 +1,26 @@
+name: Build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build
+        run: make
+
+      - name: Check for undefined symbols
+        run: "! nm -D --undefined-only gfxprim_libretro.so | grep -v -E '@GLIBC|__gmon_start__|_ITM_|__cxa_finalize'"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gfxprim_libretro
+          path: gfxprim_libretro.so
