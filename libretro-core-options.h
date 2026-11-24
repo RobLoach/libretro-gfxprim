@@ -60,6 +60,24 @@ struct retro_core_option_definition option_defs_us[] = {
 		},
 		"16 Bit"
 	},
+	{
+		"gfxprim_resolution",
+		"Resolution",
+		"Sets the screen resolution. This change requires a restart.",
+		{
+			{ "320x240", NULL },
+			{ "400x225", NULL },
+			{ "480x272", NULL },
+			{ "640x360", NULL },
+			{ "640x480", NULL },
+			{ "800x600", NULL },
+			{ "960x540", NULL },
+			{ "1280x720", NULL },
+			{ "1920x1080", NULL },
+			{ NULL, NULL },
+		},
+		"400x225"
+	},
 	{ NULL, NULL, NULL, {{0}}, NULL },
 };
 

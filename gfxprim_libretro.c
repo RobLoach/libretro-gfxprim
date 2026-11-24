@@ -1,4 +1,5 @@
 #include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -38,6 +39,7 @@ struct gfxprim_core {
 	int16_t mouseX, mouseY;
 	int16_t joypad[GP_ARRAY_SIZE(retro_joypad_map)];
 	enum gp_pixel_type pixelType;
+	unsigned int width, height;
 
 	/* Keyboard events buffered from the frontend's keyboard callback. */
 	struct {
@@ -76,6 +78,18 @@ static void check_variables(void) {
 	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
 		if (strcmp(var.value, "32 Bit") == 0)
 			core->pixelType = GP_PIXEL_xRGB8888;
+	}
+
+	var.key = "gfxprim_resolution";
+	var.value = NULL;
+	core->width = 400;
+	core->height = 225;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		unsigned int w, h;
+		if (sscanf(var.value, "%ux%u", &w, &h) == 2 && w > 0 && h > 0) {
+			core->width = w;
+			core->height = h;
+		}
 	}
 }
 
@@ -260,6 +274,8 @@ void retro_init(void) {
 		return;
 
 	core->pixelType = GP_PIXEL_RGB565;
+	core->width = 400;
+	core->height = 225;
 }
 
 void retro_deinit(void) {
@@ -407,14 +423,14 @@ bool retro_load_game(const struct retro_game_info *info) {
 	if (!backend)
 		return false;
 
-	backend->pixmap = gp_pixmap_alloc(400, 225, core->pixelType);
+	backend->pixmap = gp_pixmap_alloc(core->width, core->height, core->pixelType);
 	if (!backend->pixmap) {
 		free(backend);
 		return false;
 	}
 
 	backend->event_queue = &core->ev_queue;
-	gp_ev_queue_init(backend->event_queue, 400, 225, 0, NULL, NULL, 0);
+	gp_ev_queue_init(backend->event_queue, core->width, core->height, 0, NULL, NULL, 0);
 
 	backend->name = "libretro";
 	backend->flip = retro_flip;
