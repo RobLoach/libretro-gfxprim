@@ -39,6 +39,7 @@ SOURCES_C += \
 	$(GFXPRIM_LIBS)/core/gp_gamma_correction.c \
 	$(GFXPRIM_LIBS)/core/gp_get_put_pixel.c \
 	$(GFXPRIM_LIBS)/core/gp_pattern_fill.c \
+	$(GFXPRIM_LIBS)/core/gp_pattern_fill.gen.c \
 	$(GFXPRIM_LIBS)/core/gp_pixel.c \
 	$(GFXPRIM_LIBS)/core/gp_pixel.gen.c \
 	$(GFXPRIM_LIBS)/core/gp_pixmap.c \
@@ -60,6 +61,8 @@ SOURCES_C += \
 	$(GFXPRIM_LIBS)/filters/gp_diff.gen.c \
 	$(GFXPRIM_LIBS)/filters/gp_dither.c \
 	$(GFXPRIM_LIBS)/filters/gp_dither.gen.c \
+	$(GFXPRIM_LIBS)/filters/gp_dither_bayer.gen.c \
+	$(GFXPRIM_LIBS)/filters/gp_dither_pixel.c \
 	$(GFXPRIM_LIBS)/filters/gp_edge.c \
 	$(GFXPRIM_LIBS)/filters/gp_gaussian_noise.gen.c \
 	$(GFXPRIM_LIBS)/filters/gp_hilbert_peano.gen.c \
@@ -147,9 +150,9 @@ SOURCES_C += \
 	$(GFXPRIM_LIBS)/loaders/gp_zip.c
 
 SOURCES_C += \
-	$(GFXPRIM_LIBS)/text/gp_default_font.c \
 	$(GFXPRIM_LIBS)/text/gp_font.c \
 	$(GFXPRIM_LIBS)/text/gp_font_c64.c \
+	$(GFXPRIM_LIBS)/text/gp_font_gfxprim.c \
 	$(GFXPRIM_LIBS)/text/gp_font_haxor_narrow_18.c \
 	$(GFXPRIM_LIBS)/text/gp_font_haxor_tiny.c \
 	$(GFXPRIM_LIBS)/text/gp_fonts.c \
@@ -186,6 +189,7 @@ SOURCES_C += \
 	$(GFXPRIM_LIBS)/utils/gp_timer.c \
 	$(GFXPRIM_LIBS)/utils/gp_user_path.c \
 	$(GFXPRIM_LIBS)/utils/gp_utf.c \
+	$(GFXPRIM_LIBS)/utils/gp_utf_transform.c \
 	$(GFXPRIM_LIBS)/utils/gp_vec.c \
 	$(GFXPRIM_LIBS)/utils/gp_vec_str.c \
 
@@ -203,6 +207,7 @@ SOURCES_C += \
 	$(GFXPRIM_LIBS)/widgets/gp_file_size.c \
 	$(GFXPRIM_LIBS)/widgets/gp_key_repeat_timer.c \
 	$(GFXPRIM_LIBS)/widgets/gp_string.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_activity.c \
 	$(GFXPRIM_LIBS)/widgets/gp_widget_button.c \
 	$(GFXPRIM_LIBS)/widgets/gp_widget.c \
 	$(GFXPRIM_LIBS)/widgets/gp_widget_checkbox.c \
@@ -220,9 +225,11 @@ SOURCES_C += \
 	$(GFXPRIM_LIBS)/widgets/gp_widget_log.c \
 	$(GFXPRIM_LIBS)/widgets/gp_widget_markup.c \
 	$(GFXPRIM_LIBS)/widgets/gp_widget_ops.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_ops_focus.c \
 	$(GFXPRIM_LIBS)/widgets/gp_widget_overlay.c \
 	$(GFXPRIM_LIBS)/widgets/gp_widget_pbar.c \
 	$(GFXPRIM_LIBS)/widgets/gp_widget_pixmap.c \
+	$(GFXPRIM_LIBS)/widgets/gp_widget_push_button.c \
 	$(GFXPRIM_LIBS)/widgets/gp_widget_radio_button.c \
 	$(GFXPRIM_LIBS)/widgets/gp_widget_render.c \
 	$(GFXPRIM_LIBS)/widgets/gp_widgets_color_scheme.c \
