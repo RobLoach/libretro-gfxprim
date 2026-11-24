@@ -19,6 +19,14 @@ struct gfxprim_core {
 	int16_t keyLeft, keyRight, keyUp, keyDown;
 	int16_t keyA, keyB, keySelect, keyStart;
 	enum gp_pixel_type pixelType;
+
+	/* Keyboard events buffered from the frontend's keyboard callback. */
+	struct {
+		uint32_t key;
+		uint32_t character;
+		uint8_t down;
+	} keyEvents[GP_EVENT_QUEUE_SIZE];
+	unsigned int keyEventsHead, keyEventsTail;
 };
 
 static struct gfxprim_core *core;
@@ -97,9 +105,90 @@ static void retro_poll_mouse(gp_backend *self, uint64_t time) {
 	}
 }
 
+static const uint16_t retro_keymap[RETROK_LAST] = {
+	[RETROK_BACKSPACE] = GP_KEY_BACKSPACE, [RETROK_TAB] = GP_KEY_TAB,
+	[RETROK_RETURN] = GP_KEY_ENTER, [RETROK_PAUSE] = GP_KEY_PAUSE,
+	[RETROK_ESCAPE] = GP_KEY_ESC, [RETROK_SPACE] = GP_KEY_SPACE,
+	[RETROK_QUOTE] = GP_KEY_APOSTROPHE, [RETROK_COMMA] = GP_KEY_COMMA,
+	[RETROK_MINUS] = GP_KEY_MINUS, [RETROK_PERIOD] = GP_KEY_DOT,
+	[RETROK_SLASH] = GP_KEY_SLASH, [RETROK_SEMICOLON] = GP_KEY_SEMICOLON,
+	[RETROK_EQUALS] = GP_KEY_EQUAL, [RETROK_LEFTBRACKET] = GP_KEY_LEFT_BRACE,
+	[RETROK_BACKSLASH] = GP_KEY_BACKSLASH, [RETROK_RIGHTBRACKET] = GP_KEY_RIGHT_BRACE,
+	[RETROK_BACKQUOTE] = GP_KEY_GRAVE, [RETROK_DELETE] = GP_KEY_DELETE,
+	[RETROK_0] = GP_KEY_0, [RETROK_1] = GP_KEY_1, [RETROK_2] = GP_KEY_2,
+	[RETROK_3] = GP_KEY_3, [RETROK_4] = GP_KEY_4, [RETROK_5] = GP_KEY_5,
+	[RETROK_6] = GP_KEY_6, [RETROK_7] = GP_KEY_7, [RETROK_8] = GP_KEY_8,
+	[RETROK_9] = GP_KEY_9,
+	[RETROK_a] = GP_KEY_A, [RETROK_b] = GP_KEY_B, [RETROK_c] = GP_KEY_C,
+	[RETROK_d] = GP_KEY_D, [RETROK_e] = GP_KEY_E, [RETROK_f] = GP_KEY_F,
+	[RETROK_g] = GP_KEY_G, [RETROK_h] = GP_KEY_H, [RETROK_i] = GP_KEY_I,
+	[RETROK_j] = GP_KEY_J, [RETROK_k] = GP_KEY_K, [RETROK_l] = GP_KEY_L,
+	[RETROK_m] = GP_KEY_M, [RETROK_n] = GP_KEY_N, [RETROK_o] = GP_KEY_O,
+	[RETROK_p] = GP_KEY_P, [RETROK_q] = GP_KEY_Q, [RETROK_r] = GP_KEY_R,
+	[RETROK_s] = GP_KEY_S, [RETROK_t] = GP_KEY_T, [RETROK_u] = GP_KEY_U,
+	[RETROK_v] = GP_KEY_V, [RETROK_w] = GP_KEY_W, [RETROK_x] = GP_KEY_X,
+	[RETROK_y] = GP_KEY_Y, [RETROK_z] = GP_KEY_Z,
+	[RETROK_KP0] = GP_KEY_KP_0, [RETROK_KP1] = GP_KEY_KP_1, [RETROK_KP2] = GP_KEY_KP_2,
+	[RETROK_KP3] = GP_KEY_KP_3, [RETROK_KP4] = GP_KEY_KP_4, [RETROK_KP5] = GP_KEY_KP_5,
+	[RETROK_KP6] = GP_KEY_KP_6, [RETROK_KP7] = GP_KEY_KP_7, [RETROK_KP8] = GP_KEY_KP_8,
+	[RETROK_KP9] = GP_KEY_KP_9, [RETROK_KP_PERIOD] = GP_KEY_KP_DOT,
+	[RETROK_KP_DIVIDE] = GP_KEY_KP_SLASH, [RETROK_KP_MULTIPLY] = GP_KEY_KP_ASTERISK,
+	[RETROK_KP_MINUS] = GP_KEY_KP_MINUS, [RETROK_KP_PLUS] = GP_KEY_KP_PLUS,
+	[RETROK_KP_ENTER] = GP_KEY_KP_ENTER, [RETROK_KP_EQUALS] = GP_KEY_KP_EQUAL,
+	[RETROK_UP] = GP_KEY_UP, [RETROK_DOWN] = GP_KEY_DOWN,
+	[RETROK_RIGHT] = GP_KEY_RIGHT, [RETROK_LEFT] = GP_KEY_LEFT,
+	[RETROK_INSERT] = GP_KEY_INSERT, [RETROK_HOME] = GP_KEY_HOME,
+	[RETROK_END] = GP_KEY_END, [RETROK_PAGEUP] = GP_KEY_PAGE_UP,
+	[RETROK_PAGEDOWN] = GP_KEY_PAGE_DOWN,
+	[RETROK_F1] = GP_KEY_F1, [RETROK_F2] = GP_KEY_F2, [RETROK_F3] = GP_KEY_F3,
+	[RETROK_F4] = GP_KEY_F4, [RETROK_F5] = GP_KEY_F5, [RETROK_F6] = GP_KEY_F6,
+	[RETROK_F7] = GP_KEY_F7, [RETROK_F8] = GP_KEY_F8, [RETROK_F9] = GP_KEY_F9,
+	[RETROK_F10] = GP_KEY_F10, [RETROK_F11] = GP_KEY_F11, [RETROK_F12] = GP_KEY_F12,
+	[RETROK_F13] = GP_KEY_F13, [RETROK_F14] = GP_KEY_F14, [RETROK_F15] = GP_KEY_F15,
+	[RETROK_NUMLOCK] = GP_KEY_NUM_LOCK, [RETROK_CAPSLOCK] = GP_KEY_CAPS_LOCK,
+	[RETROK_SCROLLOCK] = GP_KEY_SCROLL_LOCK,
+	[RETROK_RSHIFT] = GP_KEY_RIGHT_SHIFT, [RETROK_LSHIFT] = GP_KEY_LEFT_SHIFT,
+	[RETROK_RCTRL] = GP_KEY_RIGHT_CTRL, [RETROK_LCTRL] = GP_KEY_LEFT_CTRL,
+	[RETROK_RALT] = GP_KEY_RIGHT_ALT, [RETROK_LALT] = GP_KEY_LEFT_ALT,
+	[RETROK_RMETA] = GP_KEY_RIGHT_META, [RETROK_LMETA] = GP_KEY_LEFT_META,
+	[RETROK_RSUPER] = GP_KEY_RIGHT_META, [RETROK_LSUPER] = GP_KEY_LEFT_META,
+	[RETROK_COMPOSE] = GP_KEY_COMPOSE, [RETROK_SYSREQ] = GP_KEY_SYSRQ,
+};
+
+/* Called by the frontend, possibly from another thread; only buffers events. */
+static void RETRO_CALLCONV retro_keyboard_event(bool down, unsigned keycode, uint32_t character, uint16_t key_modifiers) {
+	(void)key_modifiers;
+	if (!core)
+		return;
+
+	uint32_t key = keycode < RETROK_LAST ? retro_keymap[keycode] : 0;
+	if (!down)
+		character = 0;
+	if (!key && !character)
+		return;
+
+	unsigned int next = (core->keyEventsHead + 1) % GP_ARRAY_SIZE(core->keyEvents);
+	if (next == core->keyEventsTail)
+		return;
+
+	core->keyEvents[core->keyEventsHead].key = key;
+	core->keyEvents[core->keyEventsHead].character = character;
+	core->keyEvents[core->keyEventsHead].down = down;
+	core->keyEventsHead = next;
+}
+
+static void retro_flush_keyboard(gp_backend *self, uint64_t time) {
+	while (core->keyEventsTail != core->keyEventsHead) {
+		unsigned int i = core->keyEventsTail;
+		gp_ev_queue_push_key(self->event_queue, core->keyEvents[i].key,
+			core->keyEvents[i].down ? GP_EV_KEY_DOWN : GP_EV_KEY_UP,
+			core->keyEvents[i].character, time);
+		core->keyEventsTail = (i + 1) % GP_ARRAY_SIZE(core->keyEvents);
+	}
+}
+
 static void retro_poll_keyboard(gp_backend *self, uint64_t time) {
 	// TODO: Add actual gamepad support to GFXPrim?
-	// TODO: Add the actual keyboard input, rather than just gamepad input.
 	int16_t state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT);
 	if (state != core->keyLeft) {
 		core->keyLeft = state;
@@ -147,6 +236,7 @@ static void retro_poll(gp_backend *self) {
 	uint64_t time = gp_time_stamp();
 	retro_poll_mouse(self, time);
 	retro_poll_keyboard(self, time);
+	retro_flush_keyboard(self, time);
 }
 
 static void retro_exit(gp_backend *backend) {
@@ -336,6 +426,10 @@ bool retro_load_game(const struct retro_game_info *info) {
 	backend->exit = retro_exit;
 
 	core->backend = backend;
+
+	struct retro_keyboard_callback keyboard = { retro_keyboard_event };
+	if (!environ_cb(RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK, &keyboard))
+		log_cb(RETRO_LOG_WARN, "[GFXPrim]: Failed to set keyboard callback\n");
 
 	enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
 	if (core->backend->pixmap->pixel_type == GP_PIXEL_xRGB8888)
