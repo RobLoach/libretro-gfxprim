@@ -10,14 +10,33 @@ static struct retro_log_callback logging;
 static retro_log_printf_t log_cb;
 static retro_perf_get_time_usec_t perf_get_time_usec;
 
+/* Maps libretro joypad buttons to gfxprim keys. */
+static const struct {
+	unsigned retro_id;
+	uint32_t gp_key;
+	const char *desc;
+} retro_joypad_map[] = {
+	{ RETRO_DEVICE_ID_JOYPAD_LEFT,   GP_KEY_LEFT,        "Left" },
+	{ RETRO_DEVICE_ID_JOYPAD_RIGHT,  GP_KEY_RIGHT,       "Right" },
+	{ RETRO_DEVICE_ID_JOYPAD_UP,     GP_KEY_UP,          "Up" },
+	{ RETRO_DEVICE_ID_JOYPAD_DOWN,   GP_KEY_DOWN,        "Down" },
+	{ RETRO_DEVICE_ID_JOYPAD_A,      GP_KEY_A,           "A" },
+	{ RETRO_DEVICE_ID_JOYPAD_B,      GP_KEY_B,           "B" },
+	{ RETRO_DEVICE_ID_JOYPAD_X,      GP_KEY_X,           "X" },
+	{ RETRO_DEVICE_ID_JOYPAD_Y,      GP_KEY_Y,           "Y" },
+	{ RETRO_DEVICE_ID_JOYPAD_SELECT, GP_KEY_RIGHT_SHIFT, "Right Shift" },
+	{ RETRO_DEVICE_ID_JOYPAD_START,  GP_KEY_ENTER,       "Enter" },
+	{ RETRO_DEVICE_ID_JOYPAD_L,      GP_KEY_PAGE_UP,     "Page Up" },
+	{ RETRO_DEVICE_ID_JOYPAD_R,      GP_KEY_PAGE_DOWN,   "Page Down" },
+};
+
 struct gfxprim_core {
 	gp_backend *backend;
 	gp_ev_queue ev_queue;
 
 	int16_t mouseLeft, mouseRight;
 	int16_t mouseX, mouseY;
-	int16_t keyLeft, keyRight, keyUp, keyDown;
-	int16_t keyA, keyB, keySelect, keyStart;
+	int16_t joypad[GP_ARRAY_SIZE(retro_joypad_map)];
 	enum gp_pixel_type pixelType;
 
 	/* Keyboard events buffered from the frontend's keyboard callback. */
@@ -187,55 +206,32 @@ static void retro_flush_keyboard(gp_backend *self, uint64_t time) {
 	}
 }
 
-static void retro_poll_keyboard(gp_backend *self, uint64_t time) {
+static void retro_poll_joypad(gp_backend *self, uint64_t time) {
 	// TODO: Add actual gamepad support to GFXPrim?
-	int16_t state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT);
-	if (state != core->keyLeft) {
-		core->keyLeft = state;
-		gp_ev_queue_push_key(self->event_queue, GP_KEY_LEFT, (uint8_t)state, 0, time);
+	for (unsigned int i = 0; i < GP_ARRAY_SIZE(retro_joypad_map); i++) {
+		int16_t state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, retro_joypad_map[i].retro_id);
+		if (state != core->joypad[i]) {
+			core->joypad[i] = state;
+			gp_ev_queue_push_key(self->event_queue, retro_joypad_map[i].gp_key, (uint8_t)state, 0, time);
+		}
 	}
-	state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT);
-	if (state != core->keyRight) {
-		core->keyRight = state;
-		gp_ev_queue_push_key(self->event_queue, GP_KEY_RIGHT, (uint8_t)state, 0, time);
+}
+
+static void retro_set_input_descriptors(void) {
+	struct retro_input_descriptor desc[GP_ARRAY_SIZE(retro_joypad_map) + 1] = { 0 };
+	for (unsigned int i = 0; i < GP_ARRAY_SIZE(retro_joypad_map); i++) {
+		desc[i] = (struct retro_input_descriptor) {
+			0, RETRO_DEVICE_JOYPAD, 0, retro_joypad_map[i].retro_id, retro_joypad_map[i].desc
+		};
 	}
-	state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP);
-	if (state != core->keyUp) {
-		core->keyUp = state;
-		gp_ev_queue_push_key(self->event_queue, GP_KEY_UP, (uint8_t)state, 0, time);
-	}
-	state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN);
-	if (state != core->keyDown) {
-		core->keyDown = state;
-		gp_ev_queue_push_key(self->event_queue, GP_KEY_DOWN, (uint8_t)state, 0, time);
-	}
-	state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A);
-	if (state != core->keyA) {
-		core->keyA = state;
-		gp_ev_queue_push_key(self->event_queue, GP_KEY_A, (uint8_t)state, 0, time);
-	}
-	state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B);
-	if (state != core->keyB) {
-		core->keyB = state;
-		gp_ev_queue_push_key(self->event_queue, GP_KEY_B, (uint8_t)state, 0, time);
-	}
-	state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT);
-	if (state != core->keySelect) {
-		core->keySelect = state;
-		gp_ev_queue_push_key(self->event_queue, GP_KEY_RIGHT_SHIFT, (uint8_t)state, 0, time);
-	}
-	state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START);
-	if (state != core->keyStart) {
-		core->keyStart = state;
-		gp_ev_queue_push_key(self->event_queue, GP_KEY_ENTER, (uint8_t)state, 0, time);
-	}
+	environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, desc);
 }
 
 static void retro_poll(gp_backend *self) {
 	input_poll_cb();
 	uint64_t time = gp_time_stamp();
 	retro_poll_mouse(self, time);
-	retro_poll_keyboard(self, time);
+	retro_poll_joypad(self, time);
 	retro_flush_keyboard(self, time);
 }
 
@@ -430,6 +426,8 @@ bool retro_load_game(const struct retro_game_info *info) {
 	struct retro_keyboard_callback keyboard = { retro_keyboard_event };
 	if (!environ_cb(RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK, &keyboard))
 		log_cb(RETRO_LOG_WARN, "[GFXPrim]: Failed to set keyboard callback\n");
+
+	retro_set_input_descriptors();
 
 	enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
 	if (core->backend->pixmap->pixel_type == GP_PIXEL_xRGB8888)
