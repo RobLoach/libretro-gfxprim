@@ -5,6 +5,7 @@
 
 #include "gfxprim.h"
 #include "libretro.h"
+#include <features/features_cpu.h>
 #include "libretro-core-options.h"
 
 static struct retro_log_callback logging;
@@ -562,13 +563,14 @@ gp_fd *gp_poll_rem_by_fd(gp_poll *self, int fd) { (void)self; (void)fd; return N
 int    gp_poll_wait(gp_poll *self, int timeout_ms) { (void)self; (void)timeout_ms; return 0; }
 
 /*
- * gp_time_stamp — uses the libretro perf interface.
- * get_time_usec returns microseconds; divide by 1000 for milliseconds.
+ * gp_time_stamp — uses the libretro perf interface, falling back to
+ * libretro-common's monotonic timer when the frontend doesn't provide one.
+ * Both return microseconds; divide by 1000 for milliseconds.
  */
 uint64_t gp_time_stamp(void)
 {
 	if (perf_get_time_usec)
 		return (uint64_t)perf_get_time_usec() / 1000;
 
-	return 0;
+	return (uint64_t)cpu_features_get_time_usec() / 1000;
 }
