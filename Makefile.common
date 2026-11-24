@@ -23,7 +23,6 @@ endif
 SOURCES_C += \
 	$(GFXPRIM_LIBS)/backends/gp_aalib.c \
 	$(GFXPRIM_LIBS)/backends/gp_backend.c \
-	$(GFXPRIM_LIBS)/backends/gp_backend_init.c \
 	$(GFXPRIM_LIBS)/backends/gp_backend_input.c \
 	$(GFXPRIM_LIBS)/backends/gp_backend_virtual.c \
 	$(GFXPRIM_LIBS)/backends/gp_clipboard.c \

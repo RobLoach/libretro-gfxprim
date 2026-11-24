@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "gfxprim.h"
+#include "backends/gp_cursor.h"
 #include "libretro.h"
 #include "libretro-core-options.h"
 
@@ -11,29 +12,45 @@ static struct retro_log_callback logging;
 static retro_log_printf_t log_cb;
 static retro_perf_get_time_usec_t perf_get_time_usec;
 
-/* Maps libretro joypad buttons to gfxprim keys. */
+/*
+ * Maps libretro joypad buttons to gfxprim keys. Up/Down emulate Shift+Tab and
+ * Tab so the D-Pad moves the widget focus; A/Start activate the focused widget.
+ */
 static const struct {
 	unsigned retro_id;
 	uint32_t gp_key;
+	uint32_t gp_mod;
 	const char *desc;
 } retro_joypad_map[] = {
-	{ RETRO_DEVICE_ID_JOYPAD_LEFT,   GP_KEY_LEFT,        "Left" },
-	{ RETRO_DEVICE_ID_JOYPAD_RIGHT,  GP_KEY_RIGHT,       "Right" },
-	{ RETRO_DEVICE_ID_JOYPAD_UP,     GP_KEY_UP,          "Up" },
-	{ RETRO_DEVICE_ID_JOYPAD_DOWN,   GP_KEY_DOWN,        "Down" },
-	{ RETRO_DEVICE_ID_JOYPAD_A,      GP_KEY_A,           "A" },
-	{ RETRO_DEVICE_ID_JOYPAD_B,      GP_KEY_B,           "B" },
-	{ RETRO_DEVICE_ID_JOYPAD_X,      GP_KEY_X,           "X" },
-	{ RETRO_DEVICE_ID_JOYPAD_Y,      GP_KEY_Y,           "Y" },
-	{ RETRO_DEVICE_ID_JOYPAD_SELECT, GP_KEY_RIGHT_SHIFT, "Right Shift" },
-	{ RETRO_DEVICE_ID_JOYPAD_START,  GP_KEY_ENTER,       "Enter" },
-	{ RETRO_DEVICE_ID_JOYPAD_L,      GP_KEY_PAGE_UP,     "Page Up" },
-	{ RETRO_DEVICE_ID_JOYPAD_R,      GP_KEY_PAGE_DOWN,   "Page Down" },
+	{ RETRO_DEVICE_ID_JOYPAD_LEFT,   GP_KEY_LEFT,        0, "Left" },
+	{ RETRO_DEVICE_ID_JOYPAD_RIGHT,  GP_KEY_RIGHT,       0, "Right" },
+	{ RETRO_DEVICE_ID_JOYPAD_UP,     GP_KEY_TAB,         GP_KEY_LEFT_SHIFT, "Focus Previous" },
+	{ RETRO_DEVICE_ID_JOYPAD_DOWN,   GP_KEY_TAB,         0, "Focus Next" },
+	{ RETRO_DEVICE_ID_JOYPAD_A,      GP_KEY_ENTER,       0, "Enter" },
+	{ RETRO_DEVICE_ID_JOYPAD_B,      GP_KEY_ESC,         0, "Escape" },
+	{ RETRO_DEVICE_ID_JOYPAD_X,      GP_KEY_X,           0, "X" },
+	{ RETRO_DEVICE_ID_JOYPAD_Y,      GP_KEY_Y,           0, "Y" },
+	{ RETRO_DEVICE_ID_JOYPAD_SELECT, GP_KEY_RIGHT_SHIFT, 0, "Right Shift" },
+	{ RETRO_DEVICE_ID_JOYPAD_START,  GP_KEY_ENTER,       0, "Enter" },
+	{ RETRO_DEVICE_ID_JOYPAD_L,      GP_KEY_PAGE_UP,     0, "Page Up" },
+	{ RETRO_DEVICE_ID_JOYPAD_R,      GP_KEY_PAGE_DOWN,   0, "Page Down" },
 };
+
+/*
+ * The gfxprim widgets layer keeps pointers to the backend, its event queue and
+ * the layout for the lifetime of the process, so these are never freed; only
+ * the pixmap is reallocated on each retro_load_game().
+ */
+static gp_backend retro_backend;
+static gp_ev_queue retro_ev_queue;
+static gp_widget *layout;
+static gp_widget *counter_label, *pbar;
+static unsigned int clicks;
 
 struct gfxprim_core {
 	gp_backend *backend;
-	gp_ev_queue ev_queue;
+	gp_pixmap *cursorSave;
+	bool pollInput, showCursor;
 
 	int16_t mouseLeft, mouseRight, mouseMiddle;
 	int16_t mouseX, mouseY;
@@ -104,18 +121,27 @@ static void check_variables(void) {
 	}
 }
 
+/* Sends the frame to the frontend, with a software mouse cursor on top. */
 static void retro_flip(gp_backend *self) {
 	gp_pixmap *pixmap = self->pixmap;
+	gp_cursor *cursor = gp_cursors_32[GP_BACKEND_CURSOR_ARROW];
+	gp_size w = 0, h = 0;
 
-	switch (pixmap->pixel_type) {
-		case GP_PIXEL_xRGB8888:
-			video_cb(pixmap->pixels, pixmap->w, pixmap->h, pixmap->w << 2);
-			break;
-		case GP_PIXEL_RGB565:
-		default:
-			video_cb(pixmap->pixels, pixmap->w, pixmap->h, pixmap->w * sizeof(uint16_t));
-			break;
+	if (core->showCursor && core->cursorSave) {
+		w = GP_MIN((gp_size)cursor->w, pixmap->w - core->mouseX);
+		h = GP_MIN((gp_size)cursor->h, pixmap->h - core->mouseY);
+		gp_blit_xywh(pixmap, core->mouseX, core->mouseY, w, h, core->cursorSave, 0, 0);
+		gp_cursor_render(cursor, pixmap,
+			gp_rgb_to_pixmap_pixel(0, 0, 0, pixmap),
+			gp_rgb_to_pixmap_pixel(255, 255, 255, pixmap),
+			core->mouseX, core->mouseY);
 	}
+
+	video_cb(pixmap->pixels, pixmap->w, pixmap->h, pixmap->bytes_per_row);
+
+	/* Restore what was under the cursor, widgets only redraw what changed. */
+	if (w && h)
+		gp_blit_xywh(core->cursorSave, 0, 0, w, h, pixmap, core->mouseX, core->mouseY);
 }
 
 static void retro_poll_mouse(gp_backend *self, uint64_t time) {
@@ -150,6 +176,7 @@ static void retro_poll_mouse(gp_backend *self, uint64_t time) {
 			core->mouseY = 0;
 		else if (core->mouseY >= (int16_t)self->event_queue->screen_h)
 			core->mouseY = self->event_queue->screen_h - 1;
+		core->showCursor = true;
 		gp_ev_queue_set_cursor_pos(self->event_queue, core->mouseX, core->mouseY);
 	}
 }
@@ -180,6 +207,7 @@ static void retro_poll_pointer(gp_backend *self, uint64_t time) {
 	if (screenX != core->mouseX || screenY != core->mouseY) {
 		core->mouseX = screenX;
 		core->mouseY = screenY;
+		core->showCursor = true;
 		gp_ev_queue_set_cursor_pos(self->event_queue, core->mouseX, core->mouseY);
 	}
 }
@@ -270,10 +298,15 @@ static void retro_poll_joypad(gp_backend *self, uint64_t time) {
 	// TODO: Add actual gamepad support to GFXPrim?
 	for (unsigned int i = 0; i < GP_ARRAY_SIZE(retro_joypad_map); i++) {
 		int16_t state = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, retro_joypad_map[i].retro_id);
-		if (state != core->joypad[i]) {
-			core->joypad[i] = state;
-			gp_ev_queue_push_key(self->event_queue, retro_joypad_map[i].gp_key, (uint8_t)state, 0, time);
-		}
+		if (state == core->joypad[i])
+			continue;
+		core->joypad[i] = state;
+		uint32_t mod = retro_joypad_map[i].gp_mod;
+		if (mod && state)
+			gp_ev_queue_push_key(self->event_queue, mod, GP_EV_KEY_DOWN, 0, time);
+		gp_ev_queue_push_key(self->event_queue, retro_joypad_map[i].gp_key, state ? GP_EV_KEY_DOWN : GP_EV_KEY_UP, 0, time);
+		if (mod && !state)
+			gp_ev_queue_push_key(self->event_queue, mod, GP_EV_KEY_UP, 0, time);
 	}
 }
 
@@ -287,7 +320,16 @@ static void retro_set_input_descriptors(void) {
 	environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, desc);
 }
 
+/*
+ * gp_backend_ev_poll() calls this whenever the event queue runs dry, so only
+ * read the frontend input once per retro_run(); relative mouse deltas would
+ * otherwise be applied (and queued) over and over.
+ */
 static void retro_poll(gp_backend *self) {
+	if (!core->pollInput)
+		return;
+	core->pollInput = false;
+
 	input_poll_cb();
 	uint64_t time = gp_time_stamp();
 	if (core->mouseDevice == RETRO_DEVICE_MOUSE)
@@ -408,48 +450,71 @@ void retro_set_video_refresh(retro_video_refresh_t cb) {
 void retro_reset(void) {
 }
 
-static void render(gp_pixmap *pixmap) {
-	gp_pixel black  = gp_rgb_to_pixmap_pixel(10,  10,  10,  pixmap);
-	gp_pixel red    = gp_rgb_to_pixmap_pixel(230, 57,  70,  pixmap);
-	gp_pixel white  = gp_rgb_to_pixmap_pixel(245, 245, 245, pixmap);
-	gp_pixel blue   = gp_rgb_to_pixmap_pixel(69,  123, 157, pixmap);
-	gp_pixel orange = gp_rgb_to_pixmap_pixel(255, 161, 0,   pixmap);
-
-	gp_fill(pixmap, white);
-
-	gp_fill_rect(pixmap, 100, 100, 20, 40, red);
-	gp_fill_circle(pixmap, 200, 150, 30, blue);
-	gp_line(pixmap, 250, 50, 230, 130, blue);
-	gp_fill_triangle(pixmap, 60, 200, 130, 180, 90, 150, orange);
-
-	gp_text(pixmap, NULL, pixmap->w / 2, 10, GP_ALIGN_CENTER | GP_VALIGN_BELOW, black, 0, "Hello World!");
-
-	gp_fill_circle(pixmap, core->mouseX, core->mouseY, 10, core->mouseLeft == 1 ? red : orange);
+static int button_on_event(gp_widget_event *ev) {
+	if (ev->type != GP_WIDGET_EVENT_WIDGET)
+		return 0;
+	gp_widget_label_printf(counter_label, "Clicks: %u", ++clicks);
+	return 1;
 }
 
-static void event_loop(gp_backend *backend) {
-	while (gp_backend_ev_queued(backend)) {
-		gp_event *ev = gp_backend_ev_get(backend);
-		switch (ev->type) {
-			case GP_EV_KEY:
-				if (ev->code != GP_EV_KEY_DOWN)
-					break;
-				switch (ev->val) {
-					case GP_BTN_LEFT:
-					break;
-				}
-			break;
-		}
-	}
+static int slider_on_event(gp_widget_event *ev) {
+	if (ev->type != GP_WIDGET_EVENT_WIDGET)
+		return 0;
+	gp_widget_pbar_val_set(pbar, gp_widget_int_val_get(ev->self));
+	return 1;
+}
+
+static const char demo_layout[] =
+	"{\"info\": {\"version\": 1, \"license\": \"MIT\"}, \"layout\": {\"type\": \"vbox\", \"align\": \"fill\", \"widgets\": ["
+	" {\"type\": \"label\", \"text\": \"Hello World!\", \"tattr\": \"large\"},"
+	" {\"type\": \"hbox\", \"widgets\": ["
+	"  {\"type\": \"button\", \"label\": \"Click me\", \"on_event\": \"button_on_event\", \"focused\": true},"
+	"  {\"type\": \"label\", \"text\": \"Clicks: 0\", \"uid\": \"counter\", \"width\": 12}]},"
+	" {\"type\": \"checkbox\", \"label\": \"Check Box\"},"
+	" {\"type\": \"slider\", \"min\": 0, \"max\": 100, \"val\": 50, \"on_event\": \"slider_on_event\"},"
+	" {\"type\": \"pbar\", \"max\": 100, \"val\": 50, \"uid\": \"pbar\"}"
+	"]}}";
+
+/* Sorted by id, as required by the JSON loader. */
+static const gp_widget_json_addr demo_callbacks[] = {
+	{ .on_event = button_on_event, .id = "button_on_event" },
+	{ .on_event = slider_on_event, .id = "slider_on_event" },
+	{ .id = NULL }
+};
+
+/*
+ * Exported by libs/widgets/gp_widget_render.c but missing from its header. It is
+ * gp_widgets_process_events() for a single event, minus the exit() on quit.
+ */
+int gp_widgets_event(gp_event *ev, gp_widget *layout);
+
+static gp_widget *demo_layout_load(void) {
+	const gp_widget_json_callbacks callbacks = { .addrs = demo_callbacks };
+	gp_htable *uids = NULL;
+	gp_widget *ret = gp_widget_from_json_str(demo_layout, &callbacks, &uids);
+	counter_label = gp_widget_by_uid(uids, "counter", GP_WIDGET_LABEL);
+	pbar = gp_widget_by_uid(uids, "pbar", GP_WIDGET_PROGRESSBAR);
+	gp_htable_free(uids);
+	return ret;
 }
 
 void retro_run(void) {
-	if (!core || !core->backend)
+	if (!core || !core->backend || !core->backend->pixmap)
 		return;
 
-	gp_backend_poll(core->backend);
-	event_loop(core->backend);
-	render(core->backend->pixmap);
+	core->pollInput = true;
+
+	/*
+	 * The non-blocking equivalent of gp_widgets_main_loop(): gp_backend_ev_poll()
+	 * runs the timers and our retro_poll(), gp_widgets_event() dispatches each
+	 * event to the widgets, and gp_widgets_redraw() renders the dirty widgets.
+	 */
+	gp_event *ev;
+	while ((ev = gp_backend_ev_poll(core->backend))) {
+		if (gp_widgets_event(ev, layout))
+			environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, NULL);
+	}
+	gp_widgets_redraw(layout);
 	gp_backend_flip(core->backend);
 
 	audio_cb(0, 0);
@@ -457,6 +522,14 @@ void retro_run(void) {
 	bool updated = false;
 	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated)
 		check_variables();
+}
+
+static void free_pixmaps(void) {
+	gp_pixmap_free(retro_backend.pixmap);
+	gp_pixmap_free(core->cursorSave);
+	retro_backend.pixmap = NULL;
+	core->cursorSave = NULL;
+	core->backend = NULL;
 }
 
 bool retro_load_game(const struct retro_game_info *info) {
@@ -468,17 +541,30 @@ bool retro_load_game(const struct retro_game_info *info) {
 	check_variables();
 	gp_set_debug_handler(retro_debug);
 
-	gp_backend *backend = calloc(1, sizeof(gp_backend));
-	if (!backend)
-		return false;
+	enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
+	if (core->pixelType == GP_PIXEL_xRGB8888)
+		fmt = RETRO_PIXEL_FORMAT_XRGB8888;
 
-	backend->pixmap = gp_pixmap_alloc(core->width, core->height, core->pixelType);
-	if (!backend->pixmap) {
-		free(backend);
+	if (!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt)) {
+		log_cb(RETRO_LOG_ERROR, "[GFXPrim]: Failed to set pixel format %i\n", fmt);
 		return false;
 	}
 
-	backend->event_queue = &core->ev_queue;
+	gp_backend *backend = &retro_backend;
+	gp_cursor *cursor = gp_cursors_32[GP_BACKEND_CURSOR_ARROW];
+
+	backend->pixmap = gp_pixmap_alloc(core->width, core->height, core->pixelType);
+	core->cursorSave = gp_pixmap_alloc(cursor->w, cursor->h, core->pixelType);
+	core->backend = backend;
+	if (!backend->pixmap || !core->cursorSave) {
+		free_pixmaps();
+		return false;
+	}
+
+	core->mouseX = core->mouseY = 0;
+	core->showCursor = false;
+
+	backend->event_queue = &retro_ev_queue;
 	gp_ev_queue_init(backend->event_queue, core->width, core->height, 0, NULL, NULL, 0);
 
 	backend->name = "libretro";
@@ -486,25 +572,33 @@ bool retro_load_game(const struct retro_game_info *info) {
 	backend->poll = retro_poll;
 	backend->exit = retro_exit;
 
-	core->backend = backend;
-
 	struct retro_keyboard_callback keyboard = { retro_keyboard_event };
 	if (!environ_cb(RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK, &keyboard))
 		log_cb(RETRO_LOG_WARN, "[GFXPrim]: Failed to set keyboard callback\n");
 
 	retro_set_input_descriptors();
 
-	enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
-	if (core->backend->pixmap->pixel_type == GP_PIXEL_xRGB8888)
-		fmt = RETRO_PIXEL_FORMAT_XRGB8888;
+	if (!layout) {
+		layout = demo_layout_load();
+		if (!layout) {
+			log_cb(RETRO_LOG_ERROR, "[GFXPrim]: Failed to load the widgets layout\n");
+			free_pixmaps();
+			return false;
+		}
 
-	if (!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt)) {
-		log_cb(RETRO_LOG_ERROR, "[GFXPrim]: Failed to set pixel format %i\n", fmt);
-		gp_pixmap_free(core->backend->pixmap);
-		free(core->backend);
-		core->backend = NULL;
-		return false;
+		/* Sets up fonts, colors and timers, using our gp_backend_init(). */
+		gp_widgets_layout_init(layout, "gfxprim");
 	}
+
+	if (layout->min_w > core->width || layout->min_h > core->height)
+		log_cb(RETRO_LOG_WARN, "[GFXPrim]: Layout needs %ux%u, larger than %ux%u\n",
+			layout->min_w, layout->min_h, core->width, core->height);
+
+	/*
+	 * Let the widgets (re)attach to the pixmap and stretch the layout over it;
+	 * gp_widgets_layout_init() expects the backend to resize to the layout.
+	 */
+	gp_ev_queue_push(backend->event_queue, GP_EV_SYS, GP_EV_SYS_RENDER_START, 0, 0);
 
 	return true;
 }
@@ -513,9 +607,7 @@ void retro_unload_game(void) {
 	if (!core || !core->backend)
 		return;
 
-	gp_pixmap_free(core->backend->pixmap);
-	free(core->backend);
-	core->backend = NULL;
+	free_pixmaps();
 }
 
 unsigned retro_get_region(void) {
@@ -571,4 +663,17 @@ uint64_t gp_time_stamp(void)
 		return (uint64_t)perf_get_time_usec() / 1000;
 
 	return 0;
+}
+
+/*
+ * gp_backend_init — the libretro frontend is the only backend, so hand it out
+ * to anyone asking (gp_widgets_layout_init() does) instead of probing X11/SDL.
+ */
+gp_backend *gp_backend_init(const char *params, gp_size pref_w, gp_size pref_h, const char *caption)
+{
+	(void)params;
+	(void)pref_w;
+	(void)pref_h;
+	(void)caption;
+	return core ? core->backend : NULL;
 }
