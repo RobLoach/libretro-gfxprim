@@ -81,7 +81,7 @@ struct retro_core_option_definition option_defs_us[] = {
 	{
 		"gfxprim_mouse_device",
 		"Mouse Device",
-		"Dtermine which input device to use for the Mouse. Mouse uses relative movement, while Pointer uses absolute coordinates.",
+		"Determine which input device to use for the Mouse. Mouse uses relative movement, while Pointer uses absolute coordinates.",
 		{
 			{ "Mouse",   NULL },
 			{ "Pointer", NULL },
