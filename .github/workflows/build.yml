@@ -15,7 +15,7 @@ jobs:
           submodules: recursive
 
       - name: Build
-        run: make
+        run: make -j$(nproc)
 
       - name: Check for undefined symbols
         run: "! nm -D --undefined-only gfxprim_libretro.so | grep -v -E '@GLIBC|__gmon_start__|_ITM_|__cxa_finalize'"

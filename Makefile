@@ -678,21 +678,27 @@ else
 	$(LD) $(fpic) $(SHARED) $(INCLUDES) $(LFLAGS) $(LINKOUT)$@ $(OBJECTS) $(LDFLAGS) $(LIBS)
 endif
 
-%.o: %.c vendor/gfxprim/libs/core/gp_blit.gen.c
+%.o: %.c
 	$(CC) -c $(OBJOUT)$@ $< $(CFLAGS) $(INCFLAGS)
 
 clean:
-	rm -f $(OBJECTS) $(TARGET)
+	rm -f $(OBJECTS) $(TARGET) $(GFXPRIM_GEN_STAMP)
+	-$(MAKE) -C vendor/gfxprim clean
 
 .PHONY: clean
 endif
 
-vendor/gfxprim/libs/core/gp_blit.gen.c: vendor/gfxprim/config.h
+# gfxprim generates *.gen.c sources and *.gen.h headers. Generate them once,
+# before compiling anything, so parallel builds (make -j) work.
+GFXPRIM_GEN_STAMP := vendor/gfxprim/.libretro-gen.stamp
+
+$(GFXPRIM_GEN_STAMP): vendor/gfxprim/config.h
 	$(MAKE) -C vendor/gfxprim gen
+	touch $@
+
+$(filter %.gen.c,$(SOURCES_C)): | $(GFXPRIM_GEN_STAMP) ;
+
+$(OBJECTS): | $(GFXPRIM_GEN_STAMP)
 
 vendor/gfxprim/config.h:
 	echo "/* Configuration for GFXPrim */" > vendor/gfxprim/config.h
-
-clean:
-	rm -f $(OBJECTS) $(TARGET)
-	$(MAKE) -C vendor/gfxprim clean
